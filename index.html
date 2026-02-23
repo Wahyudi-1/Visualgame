@@ -107,6 +107,8 @@
         let indexFingerTips = []; // Menyimpan koordinat {x, y} ujung jari telunjuk
         let lastFrameTime = performance.now();
         let spawnTimer = 0;
+        let clickRipples = []; // Menyimpan animasi efek klik
+        let handClickStates = {}; // Menyimpan status klik per tangan
 
         // Atur ukuran canvas mengikuti layar
         function resizeCanvas() {
@@ -137,17 +139,39 @@
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
             canvasCtx.restore();
 
-            // Ekstrak posisi jari telunjuk (Landmark nomor 8 di MediaPipe)
+            // Ekstrak posisi jari dan deteksi gestur
             indexFingerTips = [];
             if (results.multiHandLandmarks) {
-                for (const landmarks of results.multiHandLandmarks) {
-                    const indexFinger = landmarks[8];
+                results.multiHandLandmarks.forEach((landmarks, index) => {
+                    const indexTip = landmarks[8];
+                    const indexPIP = landmarks[6];
+                    const middleTip = landmarks[12];
+                    const middlePIP = landmarks[10];
+                    const thumbTip = landmarks[4];
+
+                    // 1. Deteksi "Dua Jari Diangkat" (Telunjuk & Tengah tegak)
+                    const isIndexRaised = indexTip.y < indexPIP.y;
+                    const isMiddleRaised = middleTip.y < middlePIP.y;
+
+                    // Hilangkan efek jari jika dua jari diangkat
+                    if (isIndexRaised && isMiddleRaised) {
+                        handClickStates[index] = false;
+                        return; // Skip iterasi ini, tidak digambar sebagai indikator
+                    }
+
+                    // 2. Deteksi Gestur Menekuk (Klik)
+                    // Jarak antara ujung jempol dan telunjuk untuk mendeteksi gestur klik (pinch) dengan sangat stabil
+                    const distPinch = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
+                    const isClicking = distPinch < 0.06; // Threshold jarak kedekatan
+
                     indexFingerTips.push({
                         // x dan y dari MediaPipe adalah nilai relatif (0.0 - 1.0)
-                        x: indexFinger.x * canvasElement.width,
-                        y: indexFinger.y * canvasElement.height
+                        x: indexTip.x * canvasElement.width,
+                        y: indexTip.y * canvasElement.height,
+                        isClicking: isClicking,
+                        handIndex: index
                     });
-                }
+                });
             }
 
             // Jika game berjalan, jalankan logika game
@@ -339,14 +363,23 @@
             }
             canvasCtx.globalAlpha = 1.0; // Reset alpha
 
-            // 4. Gambar Indikator Jari (Supaya pengguna tahu di mana sistem membaca jarinya)
+            // 4. Gambar Indikator Jari & Efek Klik
             for (let pointer of indexFingerTips) {
+                // Memicu efek klik (Ripple) saat jari baru saja ditekuk
+                if (pointer.isClicking && !handClickStates[pointer.handIndex]) {
+                    clickRipples.push({ x: pointer.x, y: pointer.y, radius: 15, alpha: 1.0 });
+                    handClickStates[pointer.handIndex] = true;
+                } else if (!pointer.isClicking) {
+                    handClickStates[pointer.handIndex] = false;
+                }
+
                 canvasCtx.beginPath();
                 canvasCtx.arc(pointer.x, pointer.y, 15, 0, Math.PI * 2);
-                canvasCtx.fillStyle = 'rgba(56, 189, 248, 0.5)'; // Biru transparan
+                // Ubah warna kursor saat sedang mengeklik
+                canvasCtx.fillStyle = pointer.isClicking ? 'rgba(255, 255, 255, 0.8)' : 'rgba(56, 189, 248, 0.5)';
                 canvasCtx.fill();
                 canvasCtx.lineWidth = 2;
-                canvasCtx.strokeStyle = '#38bdf8'; // Biru solid
+                canvasCtx.strokeStyle = pointer.isClicking ? '#ffffff' : '#38bdf8';
                 canvasCtx.stroke();
                 
                 // Titik inti jari
@@ -354,6 +387,24 @@
                 canvasCtx.arc(pointer.x, pointer.y, 4, 0, Math.PI * 2);
                 canvasCtx.fillStyle = '#ffffff';
                 canvasCtx.fill();
+            }
+
+            // 5. Animasi Efek Gelombang Klik (Ripple)
+            for (let i = clickRipples.length - 1; i >= 0; i--) {
+                let r = clickRipples[i];
+                r.radius += dt * 200; // Gelombang membesar cepat
+                r.alpha -= dt * 3.0;  // Gelombang memudar cepat
+
+                if (r.alpha <= 0) {
+                    clickRipples.splice(i, 1);
+                    continue;
+                }
+
+                canvasCtx.beginPath();
+                canvasCtx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+                canvasCtx.strokeStyle = `rgba(255, 255, 255, ${r.alpha})`;
+                canvasCtx.lineWidth = 4;
+                canvasCtx.stroke();
             }
         }
     </script>
