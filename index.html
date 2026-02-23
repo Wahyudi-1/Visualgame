@@ -14,7 +14,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     
-    <!-- TAMBAHAN: Google MediaPipe untuk Pelacakan Wajah (Senyum) -->
+    <!-- TAMBAHAN: Google MediaPipe untuk Pelacakan Wajah (Senyum, Mulut, Kedip) -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 
     <style>
@@ -96,7 +96,7 @@
             </div>
         </div>
 
-        <!-- Menu Pilih Metode Kontrol (BARU) -->
+        <!-- Menu Pilih Metode Kontrol -->
         <div id="control-selection" class="hidden pointer-events-auto bg-gray-900 bg-opacity-95 p-6 rounded-3xl shadow-2xl text-center backdrop-blur-md border border-gray-700 max-w-lg w-full mx-4 transition-all duration-500 flex-col">
             <h2 class="text-2xl font-bold text-white mb-2">Metode Kontrol</h2>
             <p class="text-gray-400 text-sm mb-6">Bagaimana cara Anda ingin menangkap objek?</p>
@@ -200,6 +200,7 @@
 
     </div>
 
+    <!-- Elemen Media -->
     <video id="webcam" autoplay playsinline></video>
     <canvas id="game-canvas"></canvas>
 
@@ -210,7 +211,7 @@
         const canvasCtx = canvasElement.getContext('2d');
         
         const startMenu = document.getElementById('start-menu');
-        const controlSelectionMenu = document.getElementById('control-selection'); // Tambahan
+        const controlSelectionMenu = document.getElementById('control-selection');
         const modeSelectionMenu = document.getElementById('mode-selection');
         const targetSelectionMenu = document.getElementById('target-selection');
         const targetGrid = document.getElementById('target-grid');
@@ -237,7 +238,6 @@
             }
         }
 
-        // Suara Sorakan / Benar (Ting-ting cepat yang ceria)
         function playCorrectSound() {
             if(!audioCtx) return;
             const osc = audioCtx.createOscillator();
@@ -249,7 +249,6 @@
             osc.type = 'sine';
             const now = audioCtx.currentTime;
             
-            // Nada melompat tinggi (Arpeggio ceria)
             osc.frequency.setValueAtTime(523.25, now); // C5
             osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
             osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
@@ -262,7 +261,6 @@
             osc.stop(now + 0.4);
         }
 
-        // Suara Ledakan / Salah (Distorsi rendah & gemuruh)
         function playWrongSound() {
             if(!audioCtx) return;
             const osc = audioCtx.createOscillator();
@@ -271,10 +269,9 @@
             osc.connect(gainNode);
             gainNode.connect(audioCtx.destination);
             
-            osc.type = 'square'; // Waveform kasar seperti ledakan
+            osc.type = 'square'; 
             const now = audioCtx.currentTime;
             
-            // Frekuensi drop cepat (Efek bom jatuh)
             osc.frequency.setValueAtTime(150, now);
             osc.frequency.exponentialRampToValueAtTime(30, now + 0.3);
             
@@ -299,8 +296,8 @@
         let currentMode = ''; 
         let isGameRunning = false;
         let score = 0;
-        let targetData = null; // Menyimpan data target yang dipilih
-        let timeRemaining = 180; // 3 menit
+        let targetData = null; 
+        let timeRemaining = 180; 
         
         let bubbles = [];
         let particles = [];
@@ -308,7 +305,7 @@
         let lastFrameTime = performance.now();
         let spawnTimer = 0;
         
-        // Variabel untuk mendeteksi gestur wajah & mode kontrol
+        // Variabel untuk metode kontrol wajah
         let selectedControlMethod = 1; 
         let isSmiling = false;
         let isMouthOpen = false;
@@ -336,17 +333,17 @@
 
         // --- LOGIKA UI ALUR MENU ---
         document.getElementById('start-btn').addEventListener('click', () => {
-            initAudio(); // Inisialisasi Audio saat interaksi pertama
+            initAudio(); 
             requestFullScreen();
             startMenu.style.display = 'none';
-            controlSelectionMenu.style.display = 'flex'; // Arahkan ke menu kontrol dulu
+            controlSelectionMenu.style.display = 'flex'; 
         });
 
         function selectControl(method) {
             initAudio();
             selectedControlMethod = method;
             controlSelectionMenu.style.display = 'none';
-            modeSelectionMenu.style.display = 'flex'; // Lanjut ke menu mode
+            modeSelectionMenu.style.display = 'flex'; 
         }
 
         function selectMode(mode) {
@@ -376,7 +373,6 @@
             else if (currentMode === 'angka') items = NUMBERS;
             else if (currentMode === 'warna') items = COLORS;
 
-            // Mengatur kolom grid berdasarkan mode
             targetGrid.className = `grid gap-3 overflow-y-auto custom-scrollbar p-2 mb-4 max-h-[60vh] ${currentMode === 'angka' ? 'grid-cols-5 sm:grid-cols-7' : 'grid-cols-4 sm:grid-cols-6'}`;
 
             items.forEach(item => {
@@ -385,11 +381,11 @@
                 
                 if (currentMode === 'warna') {
                     btn.innerHTML = `<div class="w-8 h-8 rounded-full shadow-inner mb-1 border border-gray-400" style="background-color: ${item.hex}"></div><span class="text-[10px] uppercase">${item.id}</span>`;
-                    btn.onclick = () => selectFinalTarget(item); // Objek warna
+                    btn.onclick = () => selectFinalTarget(item); 
                 } else {
                     btn.innerText = item;
                     btn.className += " text-xl";
-                    btn.onclick = () => selectFinalTarget(item); // String (Huruf/Angka)
+                    btn.onclick = () => selectFinalTarget(item); 
                 }
                 
                 targetGrid.appendChild(btn);
@@ -400,7 +396,6 @@
             initAudio();
             targetData = target;
             
-            // Perbarui UI HUD Target
             targetDisplay.innerHTML = '';
             if (currentMode === 'warna') {
                 targetDisplay.innerHTML = `<div class="w-10 h-10 rounded-full shadow-lg border-2 border-white" style="background-color: ${target.hex}"></div>`;
@@ -452,19 +447,35 @@
             let isTargetObj = Math.random() < 0.35; 
             let spawnedData;
             
-            // Tentukan apa yang di-spawn berdasarkan Mode
+            // Penyempurnaan Logika Spawn: Memastikan pengecoh BUKAN target
             if (currentMode === 'huruf') {
-                spawnedData = isTargetObj ? targetData : ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
-                if(!isTargetObj && spawnedData === targetData) spawnedData = 'X'; // Hindari duplikat kebetulan
-                if (Math.random() < 0.5) spawnedData = spawnedData.toLowerCase(); // 50% Lowercase
+                if (isTargetObj) {
+                    spawnedData = targetData;
+                } else {
+                    do {
+                        spawnedData = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+                    } while (spawnedData.toUpperCase() === targetData.toUpperCase());
+                }
+                // 50% kemungkinan jadi huruf kecil
+                if (Math.random() < 0.5) spawnedData = spawnedData.toLowerCase(); 
             } 
             else if (currentMode === 'angka') {
-                spawnedData = isTargetObj ? targetData : NUMBERS[Math.floor(Math.random() * NUMBERS.length)];
-                if(!isTargetObj && spawnedData === targetData) spawnedData = '99'; 
+                if (isTargetObj) {
+                    spawnedData = targetData;
+                } else {
+                    do {
+                        spawnedData = NUMBERS[Math.floor(Math.random() * NUMBERS.length)];
+                    } while (spawnedData === targetData);
+                }
             }
             else if (currentMode === 'warna') {
-                spawnedData = isTargetObj ? targetData : COLORS[Math.floor(Math.random() * COLORS.length)];
-                if(!isTargetObj && spawnedData.id === targetData.id) spawnedData = COLORS.find(c => c.id !== targetData.id);
+                if (isTargetObj) {
+                    spawnedData = targetData;
+                } else {
+                    do {
+                        spawnedData = COLORS[Math.floor(Math.random() * COLORS.length)];
+                    } while (spawnedData.id === targetData.id);
+                }
             }
 
             const radius = currentMode === 'warna' ? Math.random() * 10 + 35 : Math.random() * 15 + 35; 
@@ -479,30 +490,34 @@
                 speedX: (Math.random() - 0.5) * 2,
                 rotation: 0,
                 rotSpeed: (Math.random() - 0.5) * 0.1
+            });
+        }
+
         // Logika Mendeteksi Senyum, Mulut, dan Kedip
+        const faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
+        faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+
         faceMesh.onResults((results) => {
             if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
                 const landmarks = results.multiFaceLandmarks[0];
                 
-                // 1. Senyum (Rasio Lebar Bibir vs Lebar Wajah)
+                // 1. Senyum
                 const mouthWidth = Math.hypot(landmarks[61].x - landmarks[291].x, landmarks[61].y - landmarks[291].y);
                 const faceWidth = Math.hypot(landmarks[234].x - landmarks[454].x, landmarks[234].y - landmarks[454].y);
                 isSmiling = (mouthWidth / faceWidth) > 0.40;
 
-                // 2. Buka Mulut (Jarak Bibir Atas vs Bawah dibandingkan Panjang Wajah)
+                // 2. Buka Mulut
                 const mouthOpenDist = Math.hypot(landmarks[13].x - landmarks[14].x, landmarks[13].y - landmarks[14].y);
                 const faceHeight = Math.hypot(landmarks[10].x - landmarks[152].x, landmarks[10].y - landmarks[152].y);
-                isMouthOpen = (mouthOpenDist / faceHeight) > 0.05; // 0.05 mendeteksi mulut terbuka dengan baik
+                isMouthOpen = (mouthOpenDist / faceHeight) > 0.05;
 
-                // 3. Kedipan Mata (Eye Aspect Ratio - EAR)
+                // 3. Kedipan Mata
                 const leftEyeV = Math.hypot(landmarks[159].x - landmarks[145].x, landmarks[159].y - landmarks[145].y);
                 const leftEyeH = Math.hypot(landmarks[33].x - landmarks[133].x, landmarks[33].y - landmarks[133].y);
                 const rightEyeV = Math.hypot(landmarks[386].x - landmarks[374].x, landmarks[386].y - landmarks[374].y);
                 const rightEyeH = Math.hypot(landmarks[362].x - landmarks[263].x, landmarks[362].y - landmarks[263].y);
                 
-                // Jika EAR turun di bawah 0.18, berarti mata memicing/menutup/berkedip
                 isBlinking = ((leftEyeV / leftEyeH) < 0.18 || (rightEyeV / rightEyeH) < 0.18);
-
             } else {
                 isSmiling = false;
                 isMouthOpen = false;
@@ -510,11 +525,15 @@
             }
         });
 
+        // Logika AI Tangan
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
+
         hands.onResults((results) => {
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             
-            // Gambar Video Kamera
+            // Render Video
             if (results.image) {
                 const videoRatio = results.image.width / results.image.height;
                 const canvasRatio = canvasElement.width / canvasElement.height;
@@ -539,15 +558,12 @@
                         const middleTip = landmarks[12];
                         const middlePIP = landmarks[10];
                         
-                        // Deteksi 2 Jari (V-Sign)
                         let isVSign = (indexTip.y < indexPIP.y && middleTip.y < middlePIP.y);
-                        
                         let fingerActive = false;
                         let msg = "";
 
-                        // Penentuan Status Klik Berdasarkan Mode Kontrol Pilihan
                         if (selectedControlMethod === 1) {
-                            fingerActive = !isVSign; // Non-aktif jika 2 jari diangkat
+                            fingerActive = !isVSign; 
                             msg = fingerActive ? "AKTIF" : "NON-AKTIF (✌️)";
                         } else if (selectedControlMethod === 2) {
                             fingerActive = isSmiling;
@@ -571,21 +587,22 @@
             }
             canvasCtx.restore();
 
+            // Pemicu Game Loop (Game hanya merender jika tangan diproses)
             if (isGameRunning) updateAndDrawGame();
             else if (loadingText.style.display === 'block') startGamePlay();
         });
 
-        // Modifikasi Kamera untuk menjalankan AI Wajah & Tangan sekaligus
+        // Modifikasi Kamera (Menjalankan Wajah lalu Tangan)
         const camera = new Camera(videoElement, { 
             onFrame: async () => { 
-                await faceMesh.send({image: videoElement}); // Proses wajah dulu
-                await hands.send({image: videoElement});    // Baru proses tangan
+                await faceMesh.send({image: videoElement}); 
+                await hands.send({image: videoElement});    
             }, 
             width: 1280, 
             height: 720 
         });
 
-        // --- RENDER UTAMA (Dipanggil oleh MediaPipe Loop) ---
+        // --- RENDER GAME UTAMA ---
         function updateAndDrawGame() {
             const now = performance.now();
             const dt = (now - lastFrameTime) / 1000;
@@ -604,7 +621,7 @@
             spawnTimer += dt;
             if (spawnTimer > 0.8) { spawnBubble(); spawnTimer = 0; }
 
-            // Update & Gambar Bubble
+            // Bubble Logic
             for (let i = bubbles.length - 1; i >= 0; i--) {
                 let b = bubbles[i];
                 b.y += b.speedY;
@@ -615,7 +632,6 @@
 
                 let isTouched = false;
                 for (let pointer of indexFingerTips) {
-                    // Cek Tabrakan, lalu Cek Apakah Kursor Aktif
                     if (Math.hypot(pointer.x - b.x, pointer.y - b.y) < b.radius + 15) { 
                         if (pointer.active) {
                             isTouched = true; 
@@ -626,12 +642,12 @@
 
                 if (isTouched) {
                     if (b.isTarget) {
-                        playCorrectSound(); // Mainkan Suara Sorakan/Benar
+                        playCorrectSound();
                         score += 10;
                         showFloatingText(b.x, b.y, "+10", true);
                         createParticles(b.x, b.y, currentMode === 'warna' ? b.data.hex : '#4ade80');
                     } else {
-                        playWrongSound(); // Mainkan Suara Ledakan/Salah
+                        playWrongSound();
                         score -= 10;
                         showFloatingText(b.x, b.y, "-10", false);
                         createParticles(b.x, b.y, '#ef4444'); 
@@ -646,13 +662,12 @@
 
                 if (b.y > canvasElement.height + b.radius) { bubbles.splice(i, 1); continue; }
 
-                // RENDER BUBBLE / OBJEK
+                // RENDER BUBBLE
                 canvasCtx.save();
                 canvasCtx.translate(b.x, b.y);
                 canvasCtx.rotate(b.rotation);
                 
                 if (currentMode === 'warna') {
-                    // Render Bola Warna Solid
                     canvasCtx.beginPath();
                     canvasCtx.arc(0, 0, b.radius, 0, Math.PI * 2);
                     canvasCtx.fillStyle = b.data.hex;
@@ -661,13 +676,11 @@
                     canvasCtx.strokeStyle = '#ffffff';
                     canvasCtx.stroke();
                     
-                    // Highlight Kaca Bola
                     canvasCtx.beginPath();
                     canvasCtx.arc(-b.radius*0.3, -b.radius*0.3, b.radius*0.3, 0, Math.PI * 2);
                     canvasCtx.fillStyle = 'rgba(255, 255, 255, 0.4)';
                     canvasCtx.fill();
                 } else {
-                    // Render Gelembung Sabun dengan Teks (Huruf/Angka)
                     canvasCtx.beginPath();
                     canvasCtx.arc(0, 0, b.radius, 0, Math.PI * 2);
                     canvasCtx.fillStyle = 'rgba(30, 64, 175, 0.6)';
@@ -682,7 +695,7 @@
                     canvasCtx.fill();
 
                     // Teks dalam gelembung
-                    canvasCtx.scale(-1, 1); // Anti-mirror untuk teks
+                    canvasCtx.scale(-1, 1); // Anti-mirror
                     canvasCtx.fillStyle = '#ffffff';
                     canvasCtx.font = `bold ${b.radius}px 'Segoe UI', Arial`;
                     canvasCtx.textAlign = 'center';
@@ -707,13 +720,13 @@
             }
             canvasCtx.globalAlpha = 1.0;
 
-            // Indikator Jari
+            // Render Jari & Indikator Teks
             for (let pointer of indexFingerTips) {
+                // Gambar Lingkaran Jari
                 canvasCtx.beginPath();
                 canvasCtx.arc(pointer.x, pointer.y, 18, 0, Math.PI * 2);
                 
                 if (pointer.active) {
-                    // Jika Aktif: Kursor Menyala dan Membesar
                     canvasCtx.fillStyle = 'rgba(56, 189, 248, 0.8)';
                     canvasCtx.fill();
                     canvasCtx.lineWidth = 4;
@@ -722,27 +735,34 @@
                     canvasCtx.shadowBlur = 15;
                     canvasCtx.stroke();
                 } else {
-                    // Jika Tidak Aktif: Kursor Redup dan Pasif
                     canvasCtx.fillStyle = 'rgba(156, 163, 175, 0.3)';
                     canvasCtx.fill();
                     canvasCtx.lineWidth = 2;
                     canvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
                     canvasCtx.stroke();
                 }
-                canvasCtx.shadowBlur = 0; // Reset efek glow
+                canvasCtx.shadowBlur = 0; 
                 
                 canvasCtx.beginPath();
                 canvasCtx.arc(pointer.x, pointer.y, 4, 0, Math.PI * 2);
                 canvasCtx.fillStyle = pointer.active ? '#ffffff' : 'rgba(255,255,255,0.5)';
                 canvasCtx.fill();
 
-                // Tambahkan Teks Bantuan di Atas Jari sesuai instruksi metode
-                canvasCtx.scale(-1, 1); // Membalikkan teks agar bisa dibaca (anti-mirror)
-                canvasCtx.fillStyle = pointer.active ? '#4ade80' : '#f87171'; // Hijau jika aktif, Merah jika pasif
+                // Render Teks Bantuan yang Rapih (Penyempurnaan Posisi & Anti-Mirror)
+                canvasCtx.save();
+                canvasCtx.translate(pointer.x, pointer.y - 35); // Pindahkan ke atas jari
+                canvasCtx.scale(-1, 1); // Balik agar bisa dibaca dari efek cermin kamera
+                
+                canvasCtx.fillStyle = pointer.active ? '#4ade80' : '#f87171';
                 canvasCtx.font = "bold 14px 'Segoe UI', Arial";
                 canvasCtx.textAlign = "center";
-                canvasCtx.fillText(pointer.message, -pointer.x, pointer.y - 30);
-                canvasCtx.scale(-1, 1); // Kembalikan efek mirror
+                
+                // Beri efek bayangan hitam pekat agar tulisan jelas terbaca di atas video
+                canvasCtx.shadowColor = 'rgba(0,0,0,1)';
+                canvasCtx.shadowBlur = 6;
+                canvasCtx.fillText(pointer.message, 0, 0);
+                
+                canvasCtx.restore();
             }
         }
     </script>
