@@ -13,6 +13,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    
+    <!-- TAMBAHAN: Google MediaPipe untuk Pelacakan Wajah (Senyum) -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; touch-action: none; }
@@ -71,6 +74,7 @@
                 <p>⏱️ Anda memiliki waktu <span class="text-yellow-400 font-bold">3 Menit</span>.</p>
                 <p>🎯 Pilih mode permainan dan target yang ingin ditangkap untuk <span class="text-green-400 font-bold">+10 Poin</span>.</p>
                 <p>💥 Hati-hati! Menyentuh objek yang salah akan mengurangi <span class="text-red-500 font-bold">-10 Poin</span>.</p>
+                <p>😁 <span class="text-green-400 font-bold">Tersenyumlah</span> untuk mengaktifkan kursor agar bisa menangkap!</p>
                 <p>🔊 Pastikan volume Anda menyala untuk efek suara!</p>
             </div>
 
@@ -268,6 +272,9 @@
         let indexFingerTips = []; 
         let lastFrameTime = performance.now();
         let spawnTimer = 0;
+        
+        // Variabel untuk mendeteksi senyuman
+        let isSmiling = false;
 
         function resizeCanvas() {
             canvasElement.width = window.innerWidth;
@@ -459,6 +466,35 @@
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
         hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
 
+        // --- MEDIA PIPE (AI WAJAH) ---
+        const faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
+        faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+
+        // Logika Mendeteksi Senyum
+        faceMesh.onResults((results) => {
+            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                const landmarks = results.multiFaceLandmarks[0];
+                
+                // Titik sudut bibir kiri (61) dan kanan (291)
+                const mouthLeft = landmarks[61];
+                const mouthRight = landmarks[291];
+                
+                // Titik ujung tulang pipi kiri (234) dan kanan (454) untuk rasio perbandingan
+                const faceLeft = landmarks[234];
+                const faceRight = landmarks[454];
+
+                // Hitung lebar mulut dan lebar wajah
+                const mouthWidth = Math.hypot(mouthLeft.x - mouthRight.x, mouthLeft.y - mouthRight.y);
+                const faceWidth = Math.hypot(faceLeft.x - faceRight.x, faceLeft.y - faceRight.y);
+
+                // Jika rasio lebar mulut meregang melebihi batas, anggap sedang tersenyum
+                const smileRatio = mouthWidth / faceWidth;
+                isSmiling = smileRatio > 0.40; // Ambang batas senyum (bisa disesuaikan)
+            } else {
+                isSmiling = false;
+            }
+        });
+
         hands.onResults((results) => {
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
@@ -494,7 +530,15 @@
             else if (loadingText.style.display === 'block') startGamePlay();
         });
 
-        const camera = new Camera(videoElement, { onFrame: async () => { await hands.send({image: videoElement}); }, width: 1280, height: 720 });
+        // Modifikasi Kamera untuk menjalankan AI Wajah & Tangan sekaligus
+        const camera = new Camera(videoElement, { 
+            onFrame: async () => { 
+                await faceMesh.send({image: videoElement}); // Proses wajah dulu
+                await hands.send({image: videoElement});    // Baru proses tangan
+            }, 
+            width: 1280, 
+            height: 720 
+        });
 
         // --- RENDER UTAMA (Dipanggil oleh MediaPipe Loop) ---
         function updateAndDrawGame() {
@@ -526,7 +570,13 @@
 
                 let isTouched = false;
                 for (let pointer of indexFingerTips) {
-                    if (Math.hypot(pointer.x - b.x, pointer.y - b.y) < b.radius + 15) { isTouched = true; break; }
+                    // Cek Tabrakan, lalu Cek Apakah Pemain Tersenyum
+                    if (Math.hypot(pointer.x - b.x, pointer.y - b.y) < b.radius + 15) { 
+                        if (isSmiling) {
+                            isTouched = true; 
+                            break; 
+                        }
+                    }
                 }
 
                 if (isTouched) {
@@ -616,16 +666,38 @@
             for (let pointer of indexFingerTips) {
                 canvasCtx.beginPath();
                 canvasCtx.arc(pointer.x, pointer.y, 18, 0, Math.PI * 2);
-                canvasCtx.fillStyle = 'rgba(56, 189, 248, 0.6)';
-                canvasCtx.fill();
-                canvasCtx.lineWidth = 3;
-                canvasCtx.strokeStyle = '#ffffff';
-                canvasCtx.stroke();
+                
+                if (isSmiling) {
+                    // Jika Tersenyum: Kursor Menyala dan Aktif
+                    canvasCtx.fillStyle = 'rgba(56, 189, 248, 0.8)';
+                    canvasCtx.fill();
+                    canvasCtx.lineWidth = 4;
+                    canvasCtx.strokeStyle = '#ffffff';
+                    canvasCtx.shadowColor = '#38bdf8';
+                    canvasCtx.shadowBlur = 15;
+                    canvasCtx.stroke();
+                } else {
+                    // Jika Tidak Tersenyum: Kursor Redup dan Pasif
+                    canvasCtx.fillStyle = 'rgba(156, 163, 175, 0.3)';
+                    canvasCtx.fill();
+                    canvasCtx.lineWidth = 2;
+                    canvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                    canvasCtx.stroke();
+                }
+                canvasCtx.shadowBlur = 0; // Reset efek glow
                 
                 canvasCtx.beginPath();
                 canvasCtx.arc(pointer.x, pointer.y, 4, 0, Math.PI * 2);
-                canvasCtx.fillStyle = '#ffffff';
+                canvasCtx.fillStyle = isSmiling ? '#ffffff' : 'rgba(255,255,255,0.5)';
                 canvasCtx.fill();
+
+                // Tambahkan Teks Bantuan di Atas Jari
+                canvasCtx.scale(-1, 1); // Membalikkan teks agar bisa dibaca (anti-mirror)
+                canvasCtx.fillStyle = isSmiling ? '#4ade80' : '#f87171'; // Hijau jika aktif, Merah jika minta senyum
+                canvasCtx.font = "bold 14px 'Segoe UI', Arial";
+                canvasCtx.textAlign = "center";
+                canvasCtx.fillText(isSmiling ? "AKTIF" : "SENYUM!", -pointer.x, pointer.y - 30);
+                canvasCtx.scale(-1, 1); // Kembalikan efek mirror
             }
         }
     </script>
