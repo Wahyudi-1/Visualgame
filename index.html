@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Game Kamera: Tangkap Huruf</title>
+    <title>Game Kamera: Tangkap Objek</title>
     
     <!-- Tailwind CSS untuk styling UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -47,10 +47,9 @@
             100% { opacity: 0; transform: translateY(-50px) scale(1.5); }
         }
         
-        /* Mencegah seleksi teks saat bermain */
         .no-select { user-select: none; -webkit-user-select: none; }
 
-        /* Custom Scrollbar untuk grid huruf */
+        /* Custom Scrollbar */
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #1f2937; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
@@ -64,15 +63,15 @@
         <!-- Menu Mulai -->
         <div id="start-menu" class="pointer-events-auto bg-gray-900 bg-opacity-90 p-8 rounded-3xl shadow-2xl text-center backdrop-blur-md border border-gray-700 max-w-md w-full mx-4 transition-all duration-500">
             <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-2">
-                TANGKAP HURUF
+                TANGKAP OBJEK
             </h1>
             <p class="text-gray-400 text-sm mb-6 uppercase tracking-widest font-semibold">Kamera Interaktif</p>
             
             <div class="text-left text-gray-300 mb-6 space-y-2 text-sm bg-gray-800 p-4 rounded-xl">
                 <p>⏱️ Anda memiliki waktu <span class="text-yellow-400 font-bold">3 Menit</span>.</p>
-                <p>🎯 Pilih satu huruf target. Sentuh gelembung huruf tersebut (Besar/Kecil) untuk <span class="text-green-400 font-bold">+10 Poin</span>.</p>
-                <p>☠️ Jika menyentuh huruf lain, Anda akan terkena <span class="text-red-500 font-bold">-10 Poin</span>.</p>
-                <p>🤏 Tekuk jari telunjuk ke jempol untuk efek klik.</p>
+                <p>🎯 Pilih mode permainan dan target yang ingin ditangkap untuk <span class="text-green-400 font-bold">+10 Poin</span>.</p>
+                <p>💥 Hati-hati! Menyentuh objek yang salah akan mengurangi <span class="text-red-500 font-bold">-10 Poin</span>.</p>
+                <p>🔊 Pastikan volume Anda menyala untuk efek suara!</p>
             </div>
 
             <button id="start-btn" class="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold py-4 px-6 rounded-2xl shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all transform hover:scale-105 active:scale-95 text-xl">
@@ -80,14 +79,37 @@
             </button>
         </div>
 
-        <!-- Menu Pilih Huruf (Awalnya Sembunyi) -->
-        <div id="letter-selection" class="hidden pointer-events-auto bg-gray-900 bg-opacity-95 p-6 rounded-3xl shadow-2xl text-center backdrop-blur-md border border-gray-700 max-w-lg w-full mx-4 transition-all duration-500 max-h-[90vh] flex-col">
-            <h2 class="text-2xl font-bold text-white mb-2">Pilih Huruf Target Anda</h2>
-            <p class="text-gray-400 text-sm mb-4">Pilih satu huruf untuk ditangkap selama permainan.</p>
+        <!-- Menu Pilih Mode Permainan -->
+        <div id="mode-selection" class="hidden pointer-events-auto bg-gray-900 bg-opacity-95 p-6 rounded-3xl shadow-2xl text-center backdrop-blur-md border border-gray-700 max-w-lg w-full mx-4 transition-all duration-500 flex-col">
+            <h2 class="text-2xl font-bold text-white mb-2">Pilih Mode Permainan</h2>
+            <p class="text-gray-400 text-sm mb-6">Apa yang ingin Anda tangkap hari ini?</p>
             
-            <div id="letter-grid" class="grid grid-cols-5 sm:grid-cols-6 gap-3 overflow-y-auto custom-scrollbar p-2 mb-4">
-                <!-- Tombol A-Z akan dimuat di sini menggunakan Javascript -->
+            <div class="grid grid-cols-1 gap-4 mb-4">
+                <button onclick="selectMode('huruf')" class="bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-400 hover:to-blue-500 text-white font-bold py-4 px-6 rounded-xl text-xl transition-transform hover:scale-105 shadow-lg flex items-center justify-between">
+                    <span>🔤 Huruf A - Z</span>
+                    <span class="text-sm bg-black bg-opacity-30 px-3 py-1 rounded-full">Besar & Kecil</span>
+                </button>
+                <button onclick="selectMode('angka')" class="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold py-4 px-6 rounded-xl text-xl transition-transform hover:scale-105 shadow-lg flex items-center justify-between">
+                    <span>🔢 Angka 0 - 30</span>
+                    <span class="text-sm bg-black bg-opacity-30 px-3 py-1 rounded-full">Matematika</span>
+                </button>
+                <button onclick="selectMode('warna')" class="bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-400 hover:to-orange-400 text-white font-bold py-4 px-6 rounded-xl text-xl transition-transform hover:scale-105 shadow-lg flex items-center justify-between">
+                    <span>🎨 Aneka Warna</span>
+                    <span class="text-sm bg-black bg-opacity-30 px-3 py-1 rounded-full">Visual</span>
+                </button>
             </div>
+        </div>
+
+        <!-- Menu Pilih Target Spesifik -->
+        <div id="target-selection" class="hidden pointer-events-auto bg-gray-900 bg-opacity-95 p-6 rounded-3xl shadow-2xl text-center backdrop-blur-md border border-gray-700 max-w-xl w-full mx-4 transition-all duration-500 max-h-[90vh] flex-col">
+            <h2 id="target-title" class="text-2xl font-bold text-white mb-2">Pilih Target Anda</h2>
+            <p class="text-gray-400 text-sm mb-4">Pilih satu target utama untuk ditangkap.</p>
+            
+            <div id="target-grid" class="grid grid-cols-4 sm:grid-cols-6 gap-3 overflow-y-auto custom-scrollbar p-2 mb-4 max-h-[60vh]">
+                <!-- Tombol Target akan dimuat di sini menggunakan Javascript -->
+            </div>
+
+            <button onclick="backToModeSelection()" id="back-btn" class="mt-2 text-gray-400 hover:text-white text-sm underline pb-2">Kembali Pilih Mode</button>
 
             <p id="loading-text" class="text-yellow-400 mt-2 text-sm hidden font-semibold animate-pulse">
                 Menghidupkan Kamera & AI (Mohon tunggu)...
@@ -98,13 +120,13 @@
         <div id="hud" class="absolute top-0 left-0 w-full p-4 flex justify-between items-start hidden">
             <div class="flex gap-4">
                 <!-- Papan Target -->
-                <div class="bg-blue-900 bg-opacity-80 backdrop-blur-md rounded-2xl p-4 border border-blue-500 shadow-lg min-w-[100px] text-center">
-                    <p class="text-blue-200 text-xs font-bold uppercase tracking-widest mb-1">TARGET</p>
-                    <p id="target-display" class="text-4xl font-black text-white">A</p>
+                <div class="bg-blue-900 bg-opacity-80 backdrop-blur-md rounded-2xl p-4 border border-blue-500 shadow-lg min-w-[100px] text-center flex flex-col items-center justify-center">
+                    <p class="text-blue-200 text-[10px] font-bold uppercase tracking-widest mb-1">TARGET</p>
+                    <div id="target-display" class="text-3xl font-black text-white">A</div>
                 </div>
                 <!-- Papan Skor -->
-                <div class="bg-gray-900 bg-opacity-75 backdrop-blur-md rounded-2xl p-4 border border-gray-700 shadow-lg min-w-[120px] text-center">
-                    <p class="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">SKOR</p>
+                <div class="bg-gray-900 bg-opacity-75 backdrop-blur-md rounded-2xl p-4 border border-gray-700 shadow-lg min-w-[100px] text-center">
+                    <p class="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1">SKOR</p>
                     <p id="score-display" class="text-4xl font-black text-white transition-colors duration-300">0</p>
                 </div>
             </div>
@@ -144,14 +166,15 @@
     <canvas id="game-canvas"></canvas>
 
     <script>
+        // --- DEKLARASI ELEMEN ---
         const videoElement = document.getElementById('webcam');
         const canvasElement = document.getElementById('game-canvas');
         const canvasCtx = canvasElement.getContext('2d');
         
         const startMenu = document.getElementById('start-menu');
-        const startBtn = document.getElementById('start-btn');
-        const letterSelection = document.getElementById('letter-selection');
-        const letterGrid = document.getElementById('letter-grid');
+        const modeSelectionMenu = document.getElementById('mode-selection');
+        const targetSelectionMenu = document.getElementById('target-selection');
+        const targetGrid = document.getElementById('target-grid');
         const loadingText = document.getElementById('loading-text');
         
         const hud = document.getElementById('hud');
@@ -159,38 +182,93 @@
         const targetDisplay = document.getElementById('target-display');
         const timerDisplay = document.getElementById('timer-display');
         const timerBox = document.getElementById('timer-box');
-        
         const gameOverScreen = document.getElementById('game-over');
         const finalScoreDisplay = document.getElementById('final-score');
+        const backBtn = document.getElementById('back-btn');
 
-        // Konstanta & Status Game
-        const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        // --- SISTEM SUARA (WEB AUDIO API) ---
+        let audioCtx;
+        
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // Suara Sorakan / Benar (Ting-ting cepat yang ceria)
+        function playCorrectSound() {
+            if(!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            osc.type = 'sine';
+            const now = audioCtx.currentTime;
+            
+            // Nada melompat tinggi (Arpeggio ceria)
+            osc.frequency.setValueAtTime(523.25, now); // C5
+            osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+            osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
+            
+            gainNode.gain.setValueAtTime(0, now);
+            gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+            
+            osc.start(now);
+            osc.stop(now + 0.4);
+        }
+
+        // Suara Ledakan / Salah (Distorsi rendah & gemuruh)
+        function playWrongSound() {
+            if(!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            osc.type = 'square'; // Waveform kasar seperti ledakan
+            const now = audioCtx.currentTime;
+            
+            // Frekuensi drop cepat (Efek bom jatuh)
+            osc.frequency.setValueAtTime(150, now);
+            osc.frequency.exponentialRampToValueAtTime(30, now + 0.3);
+            
+            gainNode.gain.setValueAtTime(0.5, now);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+            
+            osc.start(now);
+            osc.stop(now + 0.4);
+        }
+
+        // --- KONSTANTA & DATA PERMAINAN ---
+        const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split('');
+        const NUMBERS = Array.from({length: 31}, (_, i) => i.toString());
+        const COLORS = [
+            { id: 'Merah', hex: '#ef4444' }, { id: 'Biru', hex: '#3b82f6' },
+            { id: 'Hijau', hex: '#22c55e' }, { id: 'Kuning', hex: '#eab308' },
+            { id: 'Ungu', hex: '#a855f7' }, { id: 'Oranye', hex: '#f97316' },
+            { id: 'Pink', hex: '#ec4899' }, { id: 'Putih', hex: '#ffffff' },
+            { id: 'Abu-abu', hex: '#6b7280' }, { id: 'Coklat', hex: '#78350f' }
+        ];
+
+        let currentMode = ''; 
         let isGameRunning = false;
         let score = 0;
-        let targetLetter = 'A';
-        let timeRemaining = 180; // 3 menit = 180 detik
+        let targetData = null; // Menyimpan data target yang dipilih
+        let timeRemaining = 180; // 3 menit
         
         let bubbles = [];
         let particles = [];
         let indexFingerTips = []; 
-        let clickRipples = []; 
-        let handClickStates = {}; 
         let lastFrameTime = performance.now();
         let spawnTimer = 0;
 
-        // --- INISIALISASI UI PILIH HURUF ---
-        function initLetterGrid() {
-            ALPHABET.split('').forEach(letter => {
-                const btn = document.createElement('button');
-                btn.innerText = letter;
-                btn.className = "bg-gray-800 border border-gray-600 hover:bg-blue-600 hover:border-blue-400 text-white font-bold py-3 rounded-xl text-xl transition-all shadow-sm transform hover:scale-110 active:scale-95";
-                btn.onclick = () => selectTargetLetter(letter);
-                letterGrid.appendChild(btn);
-            });
-        }
-        initLetterGrid();
-
-        // Mengatur Ukuran Canvas
         function resizeCanvas() {
             canvasElement.width = window.innerWidth;
             canvasElement.height = window.innerHeight;
@@ -198,111 +276,92 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // --- FUNGSI FULLSCREEN ---
         function requestFullScreen() {
             const docElm = document.documentElement;
-            if (docElm.requestFullscreen) { docElm.requestFullscreen(); }
-            else if (docElm.mozRequestFullScreen) { docElm.mozRequestFullScreen(); }
-            else if (docElm.webkitRequestFullScreen) { docElm.webkitRequestFullScreen(); }
-            else if (docElm.msRequestFullscreen) { docElm.msRequestFullscreen(); }
+            if (docElm.requestFullscreen) docElm.requestFullscreen();
+            else if (docElm.mozRequestFullScreen) docElm.mozRequestFullScreen();
+            else if (docElm.webkitRequestFullScreen) docElm.webkitRequestFullScreen();
         }
 
         function exitFullscreenAndReload() {
-            if (document.exitFullscreen) { document.exitFullscreen(); }
-            else if (document.webkitExitFullscreen) { document.webkitExitFullscreen(); }
+            if (document.exitFullscreen) document.exitFullscreen();
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
             setTimeout(() => location.reload(), 300);
         }
 
-        // --- MEDIA PIPE (AI TANGAN) ---
-        const hands = new Hands({locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-        }});
-        
-        hands.setOptions({
-            maxNumHands: 2,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.6,
-            minTrackingConfidence: 0.6
-        });
-
-        hands.onResults((results) => {
-            canvasCtx.save();
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            
-            // Gambar Background Kamera Proporsional
-            const videoRatio = results.image.width / results.image.height;
-            const canvasRatio = canvasElement.width / canvasElement.height;
-            let drawWidth, drawHeight, startX, startY;
-
-            if (canvasRatio > videoRatio) {
-                drawWidth = canvasElement.width;
-                drawHeight = canvasElement.width / videoRatio;
-                startX = 0;
-                startY = (canvasElement.height - drawHeight) / 2;
-            } else {
-                drawHeight = canvasElement.height;
-                drawWidth = canvasElement.height * videoRatio;
-                startX = (canvasElement.width - drawWidth) / 2;
-                startY = 0;
-            }
-            canvasCtx.drawImage(results.image, startX, startY, drawWidth, drawHeight);
-            canvasCtx.restore();
-
-            indexFingerTips = [];
-            if (results.multiHandLandmarks) {
-                results.multiHandLandmarks.forEach((landmarks, index) => {
-                    const indexTip = landmarks[8];
-                    const indexPIP = landmarks[6];
-                    const middleTip = landmarks[12];
-                    const middlePIP = landmarks[10];
-                    const thumbTip = landmarks[4];
-
-                    // V-sign untuk menyembunyikan pointer
-                    if (indexTip.y < indexPIP.y && middleTip.y < middlePIP.y) {
-                        handClickStates[index] = false;
-                        return; 
-                    }
-
-                    // Deteksi Pinch/Klik
-                    const isClicking = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y) < 0.06;
-
-                    let actualX = (indexTip.x * drawWidth) + startX;
-                    let actualY = (indexTip.y * drawHeight) + startY;
-
-                    indexFingerTips.push({ x: actualX, y: actualY, isClicking: isClicking, handIndex: index });
-                });
-            }
-
-            if (isGameRunning) {
-                updateAndDrawGame();
-            } else if (loadingText.style.display === 'block') {
-                startGamePlay(); // Kamera AI sudah siap, mulai game!
-            }
-        });
-
-        const camera = new Camera(videoElement, {
-            onFrame: async () => { await hands.send({image: videoElement}); },
-            width: 1280, height: 720
-        });
-
-        // --- KONTROL UI & ALUR GAME ---
-        startBtn.addEventListener('click', () => {
+        // --- LOGIKA UI ALUR MENU ---
+        document.getElementById('start-btn').addEventListener('click', () => {
+            initAudio(); // Inisialisasi Audio saat interaksi pertama
             requestFullScreen();
             startMenu.style.display = 'none';
-            letterSelection.style.display = 'flex';
+            modeSelectionMenu.style.display = 'flex';
         });
 
-        function selectTargetLetter(letter) {
-            targetLetter = letter;
-            targetDisplay.innerText = letter;
+        function selectMode(mode) {
+            initAudio();
+            currentMode = mode;
+            modeSelectionMenu.style.display = 'none';
+            targetSelectionMenu.style.display = 'flex';
             
-            // Sembunyikan grid, tampilkan loading kamera
-            letterGrid.style.display = 'none';
-            document.querySelector('#letter-selection h2').innerText = "Mempersiapkan...";
-            document.querySelector('#letter-selection p').style.display = 'none';
+            const titleEl = document.getElementById('target-title');
+            if(mode === 'huruf') titleEl.innerText = "Pilih Huruf Target";
+            else if(mode === 'angka') titleEl.innerText = "Pilih Angka Target";
+            else if(mode === 'warna') titleEl.innerText = "Pilih Warna Target";
+
+            populateTargetGrid();
+        }
+
+        function backToModeSelection() {
+            targetSelectionMenu.style.display = 'none';
+            modeSelectionMenu.style.display = 'flex';
+        }
+
+        function populateTargetGrid() {
+            targetGrid.innerHTML = '';
+            let items = [];
+            
+            if (currentMode === 'huruf') items = ALPHABET;
+            else if (currentMode === 'angka') items = NUMBERS;
+            else if (currentMode === 'warna') items = COLORS;
+
+            // Mengatur kolom grid berdasarkan mode
+            targetGrid.className = `grid gap-3 overflow-y-auto custom-scrollbar p-2 mb-4 max-h-[60vh] ${currentMode === 'angka' ? 'grid-cols-5 sm:grid-cols-7' : 'grid-cols-4 sm:grid-cols-6'}`;
+
+            items.forEach(item => {
+                const btn = document.createElement('button');
+                btn.className = "bg-gray-800 border border-gray-600 hover:bg-blue-600 hover:border-blue-400 text-white font-bold py-3 rounded-xl transition-all shadow-sm transform hover:scale-110 active:scale-95 flex flex-col items-center justify-center min-h-[60px]";
+                
+                if (currentMode === 'warna') {
+                    btn.innerHTML = `<div class="w-8 h-8 rounded-full shadow-inner mb-1 border border-gray-400" style="background-color: ${item.hex}"></div><span class="text-[10px] uppercase">${item.id}</span>`;
+                    btn.onclick = () => selectFinalTarget(item); // Objek warna
+                } else {
+                    btn.innerText = item;
+                    btn.className += " text-xl";
+                    btn.onclick = () => selectFinalTarget(item); // String (Huruf/Angka)
+                }
+                
+                targetGrid.appendChild(btn);
+            });
+        }
+
+        function selectFinalTarget(target) {
+            initAudio();
+            targetData = target;
+            
+            // Perbarui UI HUD Target
+            targetDisplay.innerHTML = '';
+            if (currentMode === 'warna') {
+                targetDisplay.innerHTML = `<div class="w-10 h-10 rounded-full shadow-lg border-2 border-white" style="background-color: ${target.hex}"></div>`;
+            } else {
+                targetDisplay.innerText = target;
+            }
+            
+            targetGrid.style.display = 'none';
+            backBtn.style.display = 'none';
+            document.querySelector('#target-selection h2').innerText = "Mempersiapkan AI...";
+            document.querySelector('#target-selection p').style.display = 'none';
             loadingText.style.display = 'block';
 
-            // Nyalakan Kamera
             camera.start().catch(err => {
                 alert("Gagal mengakses kamera. Pastikan memberikan izin!");
                 location.reload();
@@ -311,7 +370,7 @@
 
         function startGamePlay() {
             loadingText.style.display = 'none';
-            letterSelection.style.display = 'none';
+            targetSelectionMenu.style.display = 'none';
             hud.style.display = 'flex';
             
             isGameRunning = true;
@@ -327,12 +386,7 @@
             hud.style.display = 'none';
             gameOverScreen.style.display = 'block';
             finalScoreDisplay.innerText = score;
-            
-            // Efek suara/warna sesuai skor
-            if(score < 0) {
-                finalScoreDisplay.classList.add('text-red-500');
-                finalScoreDisplay.classList.remove('text-white');
-            }
+            if(score < 0) finalScoreDisplay.classList.replace('text-white', 'text-red-500');
         }
 
         function formatTime(seconds) {
@@ -341,30 +395,34 @@
             return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
         }
 
-        // --- LOGIKA GAME ---
+        // --- LOGIKA GAME (SPAWN & COLLISION) ---
         function spawnBubble() {
-            // 35% kemungkinan muncul target, 65% huruf acak
             let isTargetObj = Math.random() < 0.35; 
-            let spawnedLetter = targetLetter;
-
-            if (!isTargetObj) {
-                do {
-                    spawnedLetter = ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
-                } while (spawnedLetter === targetLetter);
+            let spawnedData;
+            
+            // Tentukan apa yang di-spawn berdasarkan Mode
+            if (currentMode === 'huruf') {
+                spawnedData = isTargetObj ? targetData : ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+                if(!isTargetObj && spawnedData === targetData) spawnedData = 'X'; // Hindari duplikat kebetulan
+                if (Math.random() < 0.5) spawnedData = spawnedData.toLowerCase(); // 50% Lowercase
+            } 
+            else if (currentMode === 'angka') {
+                spawnedData = isTargetObj ? targetData : NUMBERS[Math.floor(Math.random() * NUMBERS.length)];
+                if(!isTargetObj && spawnedData === targetData) spawnedData = '99'; 
+            }
+            else if (currentMode === 'warna') {
+                spawnedData = isTargetObj ? targetData : COLORS[Math.floor(Math.random() * COLORS.length)];
+                if(!isTargetObj && spawnedData.id === targetData.id) spawnedData = COLORS.find(c => c.id !== targetData.id);
             }
 
-            // Acak Uppercase atau Lowercase
-            if (Math.random() < 0.5) {
-                spawnedLetter = spawnedLetter.toLowerCase();
-            }
-
-            const radius = Math.random() * 15 + 35; // Ukuran gelembung
+            const radius = currentMode === 'warna' ? Math.random() * 10 + 35 : Math.random() * 15 + 35; 
+            
             bubbles.push({
                 x: Math.random() * (canvasElement.width - radius * 2) + radius,
                 y: -radius - 50,
                 radius: radius,
-                letter: spawnedLetter,
-                isTarget: isTargetObj, // Meskipun lowercase, secara logika tetap dianggap target
+                data: spawnedData,
+                isTarget: isTargetObj,
                 speedY: Math.random() * 3 + 3, 
                 speedX: (Math.random() - 0.5) * 2,
                 rotation: 0,
@@ -373,9 +431,9 @@
         }
 
         function createParticles(x, y, color) {
-            for(let i=0; i<15; i++){
+            for(let i=0; i<20; i++){
                 particles.push({
-                    x: x, y: y, vx: (Math.random() - 0.5) * 15, vy: (Math.random() - 0.5) * 15, life: 1.0, color: color
+                    x: x, y: y, vx: (Math.random() - 0.5) * 20, vy: (Math.random() - 0.5) * 20, life: 1.0, color: color
                 });
             }
         }
@@ -385,7 +443,6 @@
             el.className = `score-pop ${isPositive ? 'text-green-400' : 'text-red-500'}`;
             el.innerText = text;
             const mirroredX = window.innerWidth - x; 
-            
             el.style.left = `${mirroredX - 25}px`;
             el.style.top = `${y - 25}px`;
             document.getElementById('ui-layer').appendChild(el);
@@ -398,33 +455,65 @@
             else scoreDisplay.classList.remove('text-red-400');
         }
 
+        // --- MEDIA PIPE (AI TANGAN) ---
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
+
+        hands.onResults((results) => {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            
+            // Gambar Video Kamera
+            if (results.image) {
+                const videoRatio = results.image.width / results.image.height;
+                const canvasRatio = canvasElement.width / canvasElement.height;
+                let drawWidth, drawHeight, startX, startY;
+
+                if (canvasRatio > videoRatio) {
+                    drawWidth = canvasElement.width;
+                    drawHeight = canvasElement.width / videoRatio;
+                    startX = 0; startY = (canvasElement.height - drawHeight) / 2;
+                } else {
+                    drawHeight = canvasElement.height;
+                    drawWidth = canvasElement.height * videoRatio;
+                    startX = (canvasElement.width - drawWidth) / 2; startY = 0;
+                }
+                canvasCtx.drawImage(results.image, startX, startY, drawWidth, drawHeight);
+                
+                indexFingerTips = [];
+                if (results.multiHandLandmarks) {
+                    results.multiHandLandmarks.forEach((landmarks) => {
+                        const indexTip = landmarks[8];
+                        indexFingerTips.push({ x: (indexTip.x * drawWidth) + startX, y: (indexTip.y * drawHeight) + startY });
+                    });
+                }
+            }
+            canvasCtx.restore();
+
+            if (isGameRunning) updateAndDrawGame();
+            else if (loadingText.style.display === 'block') startGamePlay();
+        });
+
+        const camera = new Camera(videoElement, { onFrame: async () => { await hands.send({image: videoElement}); }, width: 1280, height: 720 });
+
+        // --- RENDER UTAMA (Dipanggil oleh MediaPipe Loop) ---
         function updateAndDrawGame() {
             const now = performance.now();
             const dt = (now - lastFrameTime) / 1000;
             lastFrameTime = now;
 
-            // Timer Logic
             timeRemaining -= dt;
-            if (timeRemaining <= 0) {
-                timeRemaining = 0;
-                showGameOverScreen();
-                return;
-            }
+            if (timeRemaining <= 0) { timeRemaining = 0; showGameOverScreen(); return; }
             
             timerDisplay.innerText = formatTime(timeRemaining);
-            // Beri warna merah berkedip jika sisa < 10 detik
             if (timeRemaining < 10) {
                 timerBox.classList.add('border-red-500');
                 timerDisplay.classList.add('text-red-500');
                 timerDisplay.classList.remove('text-yellow-400');
             }
 
-            // Spawn Bubble
             spawnTimer += dt;
-            if (spawnTimer > 0.8) { 
-                spawnBubble();
-                spawnTimer = 0;
-            }
+            if (spawnTimer > 0.8) { spawnBubble(); spawnTimer = 0; }
 
             // Update & Gambar Bubble
             for (let i = bubbles.length - 1; i >= 0; i--) {
@@ -435,23 +524,23 @@
 
                 if (b.x < b.radius || b.x > canvasElement.width - b.radius) b.speedX *= -1;
 
-                // Deteksi Tabrakan
                 let isTouched = false;
                 for (let pointer of indexFingerTips) {
-                    const dist = Math.hypot(pointer.x - b.x, pointer.y - b.y);
-                    if (dist < b.radius + 15) { isTouched = true; break; }
+                    if (Math.hypot(pointer.x - b.x, pointer.y - b.y) < b.radius + 15) { isTouched = true; break; }
                 }
 
                 if (isTouched) {
                     if (b.isTarget) {
+                        playCorrectSound(); // Mainkan Suara Sorakan/Benar
                         score += 10;
                         showFloatingText(b.x, b.y, "+10", true);
-                        createParticles(b.x, b.y, '#4ade80'); // Partikel hijau
+                        createParticles(b.x, b.y, currentMode === 'warna' ? b.data.hex : '#4ade80');
                     } else {
+                        playWrongSound(); // Mainkan Suara Ledakan/Salah
                         score -= 10;
                         showFloatingText(b.x, b.y, "-10", false);
-                        createParticles(b.x, b.y, '#ef4444'); // Partikel merah
-                        canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.3)'; // Layar kedip merah
+                        createParticles(b.x, b.y, '#ef4444'); 
+                        canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.4)'; 
                         canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
                     }
                     
@@ -460,56 +549,61 @@
                     continue;
                 }
 
-                if (b.y > canvasElement.height + b.radius) {
-                    bubbles.splice(i, 1);
-                    continue;
-                }
+                if (b.y > canvasElement.height + b.radius) { bubbles.splice(i, 1); continue; }
 
-                // Render Gelembung (Bubble)
+                // RENDER BUBBLE / OBJEK
                 canvasCtx.save();
                 canvasCtx.translate(b.x, b.y);
                 canvasCtx.rotate(b.rotation);
                 
-                // Lapisan Kaca Bubble
-                canvasCtx.beginPath();
-                canvasCtx.arc(0, 0, b.radius, 0, Math.PI * 2);
-                canvasCtx.fillStyle = 'rgba(30, 64, 175, 0.5)'; // Biru semi transparan
-                canvasCtx.fill();
-                canvasCtx.lineWidth = 3;
-                canvasCtx.strokeStyle = 'rgba(96, 165, 250, 0.8)';
-                canvasCtx.stroke();
-                
-                // Highlight Kaca agar terlihat seperti gelembung
-                canvasCtx.beginPath();
-                canvasCtx.arc(-b.radius*0.3, -b.radius*0.3, b.radius*0.3, 0, Math.PI * 2);
-                canvasCtx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-                canvasCtx.fill();
+                if (currentMode === 'warna') {
+                    // Render Bola Warna Solid
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(0, 0, b.radius, 0, Math.PI * 2);
+                    canvasCtx.fillStyle = b.data.hex;
+                    canvasCtx.fill();
+                    canvasCtx.lineWidth = 4;
+                    canvasCtx.strokeStyle = '#ffffff';
+                    canvasCtx.stroke();
+                    
+                    // Highlight Kaca Bola
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(-b.radius*0.3, -b.radius*0.3, b.radius*0.3, 0, Math.PI * 2);
+                    canvasCtx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                    canvasCtx.fill();
+                } else {
+                    // Render Gelembung Sabun dengan Teks (Huruf/Angka)
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(0, 0, b.radius, 0, Math.PI * 2);
+                    canvasCtx.fillStyle = 'rgba(30, 64, 175, 0.6)';
+                    canvasCtx.fill();
+                    canvasCtx.lineWidth = 3;
+                    canvasCtx.strokeStyle = 'rgba(96, 165, 250, 0.9)';
+                    canvasCtx.stroke();
+                    
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(-b.radius*0.3, -b.radius*0.3, b.radius*0.3, 0, Math.PI * 2);
+                    canvasCtx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                    canvasCtx.fill();
 
-                // Render Teks (Huruf) di dalam Bubble
-                // PENTING: Karena canvas di-mirror secara CSS scaleX(-1), kita harus scale ulang teksnya
-                // agar huruf tidak terbalik saat dibaca!
-                canvasCtx.scale(-1, 1); 
-                canvasCtx.fillStyle = '#ffffff';
-                canvasCtx.font = `bold ${b.radius}px 'Segoe UI', Arial`;
-                canvasCtx.textAlign = 'center';
-                canvasCtx.textBaseline = 'middle';
-                // Tambahkan bayangan hitam sedikit agar huruf jelas
-                canvasCtx.shadowColor = 'rgba(0,0,0,0.8)';
-                canvasCtx.shadowBlur = 5;
-                canvasCtx.fillText(b.letter, 0, 0);
-
+                    // Teks dalam gelembung
+                    canvasCtx.scale(-1, 1); // Anti-mirror untuk teks
+                    canvasCtx.fillStyle = '#ffffff';
+                    canvasCtx.font = `bold ${b.radius}px 'Segoe UI', Arial`;
+                    canvasCtx.textAlign = 'center';
+                    canvasCtx.textBaseline = 'middle';
+                    canvasCtx.shadowColor = 'rgba(0,0,0,0.8)';
+                    canvasCtx.shadowBlur = 5;
+                    canvasCtx.fillText(b.data, 0, 0);
+                }
                 canvasCtx.restore();
             }
 
             // Render Partikel
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
-                p.x += p.vx;
-                p.y += p.vy;
-                p.life -= dt * 2.5; 
-
+                p.x += p.vx; p.y += p.vy; p.life -= dt * 3.0; 
                 if (p.life <= 0) { particles.splice(i, 1); continue; }
-
                 canvasCtx.globalAlpha = p.life;
                 canvasCtx.beginPath();
                 canvasCtx.arc(p.x, p.y, 6, 0, Math.PI * 2);
@@ -518,40 +612,20 @@
             }
             canvasCtx.globalAlpha = 1.0;
 
-            // Indikator Jari & Efek Ripple Klik
+            // Indikator Jari
             for (let pointer of indexFingerTips) {
-                if (pointer.isClicking && !handClickStates[pointer.handIndex]) {
-                    clickRipples.push({ x: pointer.x, y: pointer.y, radius: 15, alpha: 1.0 });
-                    handClickStates[pointer.handIndex] = true;
-                } else if (!pointer.isClicking) {
-                    handClickStates[pointer.handIndex] = false;
-                }
-
                 canvasCtx.beginPath();
                 canvasCtx.arc(pointer.x, pointer.y, 18, 0, Math.PI * 2);
-                canvasCtx.fillStyle = pointer.isClicking ? 'rgba(255, 255, 255, 0.9)' : 'rgba(56, 189, 248, 0.6)';
-                canvasCtx.shadowColor = pointer.isClicking ? '#ffffff' : '#38bdf8';
-                canvasCtx.shadowBlur = 20;
+                canvasCtx.fillStyle = 'rgba(56, 189, 248, 0.6)';
                 canvasCtx.fill();
                 canvasCtx.lineWidth = 3;
                 canvasCtx.strokeStyle = '#ffffff';
                 canvasCtx.stroke();
-                canvasCtx.shadowBlur = 0;
-            }
-
-            // Animasi Gelombang (Ripple)
-            for (let i = clickRipples.length - 1; i >= 0; i--) {
-                let r = clickRipples[i];
-                r.radius += dt * 300; 
-                r.alpha -= dt * 2.5;  
-
-                if (r.alpha <= 0) { clickRipples.splice(i, 1); continue; }
-
+                
                 canvasCtx.beginPath();
-                canvasCtx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
-                canvasCtx.strokeStyle = `rgba(255, 255, 255, ${r.alpha})`;
-                canvasCtx.lineWidth = 5 * r.alpha;
-                canvasCtx.stroke();
+                canvasCtx.arc(pointer.x, pointer.y, 4, 0, Math.PI * 2);
+                canvasCtx.fillStyle = '#ffffff';
+                canvasCtx.fill();
             }
         }
     </script>
