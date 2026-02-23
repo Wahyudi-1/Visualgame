@@ -2,409 +2,571 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Kamera: Tangkap Bola</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Game Kamera: Tangkap Objek</title>
     
-    <!-- Tailwind CSS untuk styling UI -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Google MediaPipe untuk Pelacakan Tangan (Hand Tracking) -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
     <style>
-        /* Memastikan area permainan tidak bisa di-scroll dan menutupi layar */
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #111; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #111; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; touch-action: none; }
         
-        /* Video disembunyikan karena kita akan menggambarnya di dalam Canvas */
-        #webcam { display: none; }
+        /* PERBAIKAN BUG KAMERA: Video dilempar jauh dari layar tetapi ukurannya dipertahankan agar browser tidak membekukannya (Throttling) */
+        #webcam { position: absolute; left: -10000px; top: -10000px; width: 640px; height: 480px; pointer-events: none; }
         
-        /* Canvas permainan menutupi seluruh layar */
-        #game-canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-            /* Membalik tampilan canvas agar seperti cermin */
-            transform: scaleX(-1); 
-        }
-
+        #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; transform: scaleX(-1); object-fit: cover; }
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
         .pointer-events-auto { pointer-events: auto; }
         
-        /* Efek Teks Skor */
-        .score-pop {
-            position: absolute;
-            font-weight: bold;
-            font-size: 2rem;
-            animation: floatUp 1s ease-out forwards;
-            pointer-events: none;
-            z-index: 20;
-        }
-        @keyframes floatUp {
-            0% { opacity: 1; transform: translateY(0) scale(1); }
-            100% { opacity: 0; transform: translateY(-50px) scale(1.5); }
-        }
+        .score-pop { position: absolute; font-weight: bold; font-size: 2.5rem; animation: floatUp 1s ease-out forwards; pointer-events: none; z-index: 20; text-shadow: 0 0 10px rgba(0,0,0,0.8); }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-50px) scale(1.5); } }
+        
+        .no-select { user-select: none; -webkit-user-select: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1f2937; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
     </style>
 </head>
 <body>
 
-    <!-- Area UI HTML (Menu, Skor, Pesan) -->
-    <div id="ui-layer" class="flex flex-col justify-center items-center">
+    <div id="ui-layer" class="flex flex-col justify-center items-center no-select">
         
-        <!-- Menu Mulai -->
-        <div id="start-menu" class="pointer-events-auto bg-gray-900 bg-opacity-80 p-8 rounded-2xl shadow-2xl text-center backdrop-blur-sm border border-gray-700 max-w-md w-full mx-4">
-            <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500 mb-4">
-                TANGKAP BOLA
+        <!-- MENU UTAMA -->
+        <div id="start-menu" class="pointer-events-auto bg-gray-900 bg-opacity-90 p-8 rounded-3xl shadow-2xl text-center backdrop-blur-md border border-gray-700 max-w-md w-full mx-4 transition-all duration-500">
+            <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400 mb-2">
+                TANGKAP OBJEK
             </h1>
-            <p class="text-gray-300 mb-6">
-                Gunakan kamera Anda. Sentuh bola <span class="text-green-400 font-bold">HIJAU (+10)</span> dengan jari telunjuk Anda. Hindari bola <span class="text-red-500 font-bold">MERAH (-10)</span>!
-            </p>
-            <button id="start-btn" class="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold py-3 px-6 rounded-full shadow-lg transition transform hover:scale-105 active:scale-95 text-xl">
-                Izinkan Kamera & Mainkan
+            <p class="text-gray-400 text-sm mb-6 uppercase tracking-widest font-semibold">Kamera Interaktif (Versi Ringan)</p>
+            
+            <div class="text-left text-gray-300 mb-6 space-y-2 text-sm bg-gray-800 p-4 rounded-xl">
+                <p>⏱️ Waktu Bermain: <span class="text-yellow-400 font-bold">Pilihan (0.5 - 5 Menit)</span>.</p>
+                <p>🎯 Tangkap target yang benar untuk <span class="text-green-400 font-bold">+10 Poin</span>.</p>
+                <p>💥 Hati-hati objek pengecoh! Salah sentuh <span class="text-red-500 font-bold">-10 Poin</span>.</p>
+                <p>👆 <span class="text-blue-400 font-bold">Kontrol Jari:</span> Luruskan telunjuk untuk menangkap. Luruskan dua jari (✌️) untuk menjeda kursor.</p>
+            </div>
+
+            <!-- Tombol Mulai (Memperbaiki tag penutup HTML sebelumnya yang rusak) -->
+            <button id="start-btn" class="w-full bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-500 hover:to-green-500 text-white font-bold py-4 px-6 rounded-2xl shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all transform hover:scale-105 active:scale-95 text-xl mb-4">
+                Mulai (Layar Penuh)
             </button>
-            <p id="loading-text" class="text-yellow-400 mt-4 text-sm hidden font-semibold animate-pulse">
-                Memuat AI Kamera (Harap tunggu beberapa detik)...
-            </p>
+
+            <!-- Keterangan Pembuat -->
+            <div class="mt-4 pt-4 border-t border-gray-700 text-sm text-gray-400">
+                <p>Dibuat oleh <span class="font-bold text-gray-200">Wahyudi</span> dengan menggunakan <span class="font-bold text-gray-200">Gemini AI</span></p>
+                <a href="https://wa.me/6281336578058" target="_blank" rel="noopener noreferrer" class="mt-3 inline-flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#128C7E] text-white font-bold py-2 px-4 rounded-xl transition-all shadow-lg transform hover:scale-105 pointer-events-auto">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                    0813-3657-8058
+                </a>
+            </div>
         </div>
 
-        <!-- HUD: Skor & Indikator (Awalnya Sembunyi) -->
-        <div id="hud" class="absolute top-0 left-0 w-full p-4 flex justify-between items-start hidden">
-            <div class="bg-gray-900 bg-opacity-75 backdrop-blur-md rounded-xl p-4 border border-gray-700 shadow-lg">
-                <p class="text-gray-400 text-sm font-bold uppercase tracking-wider">Skor Total</p>
-                <p id="score-display" class="text-5xl font-black text-white">0</p>
+        <!-- MENU PILIH WAKTU -->
+        <div id="time-selection" class="hidden pointer-events-auto bg-gray-900 bg-opacity-95 p-6 rounded-3xl shadow-2xl text-center backdrop-blur-md border border-gray-700 max-w-lg w-full mx-4 transition-all duration-500 flex-col">
+            <h2 class="text-2xl font-bold text-white mb-2">Pilih Waktu Bermain</h2>
+            <p class="text-gray-400 text-sm mb-6">Berapa lama Anda ingin bermain?</p>
+            
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
+                <button onclick="selectTime(30)" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 px-4 rounded-xl text-lg transition-transform hover:scale-105 shadow-lg">0.5 Menit</button>
+                <button onclick="selectTime(60)" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 px-4 rounded-xl text-lg transition-transform hover:scale-105 shadow-lg">1 Menit</button>
+                <button onclick="selectTime(120)" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 px-4 rounded-xl text-lg transition-transform hover:scale-105 shadow-lg">2 Menit</button>
+                <button onclick="selectTime(180)" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 px-4 rounded-xl text-lg transition-transform hover:scale-105 shadow-lg">3 Menit</button>
+                <button onclick="selectTime(240)" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 px-4 rounded-xl text-lg transition-transform hover:scale-105 shadow-lg">4 Menit</button>
+                <button onclick="selectTime(300)" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 px-4 rounded-xl text-lg transition-transform hover:scale-105 shadow-lg">5 Menit</button>
             </div>
-            <div class="bg-red-900 bg-opacity-50 text-red-200 text-xs px-3 py-1 rounded-full border border-red-700 pointer-events-auto cursor-pointer hover:bg-red-800" onclick="location.reload()">
-                Berhenti / Reload
+            <button onclick="backToStartMenu()" class="mt-2 text-gray-400 hover:text-white text-sm underline pb-2">Kembali ke Menu Utama</button>
+        </div>
+
+        <!-- MENU PILIH MODE -->
+        <div id="mode-selection" class="hidden pointer-events-auto bg-gray-900 bg-opacity-95 p-6 rounded-3xl shadow-2xl text-center backdrop-blur-md border border-gray-700 max-w-lg w-full mx-4 transition-all duration-500 flex-col">
+            <h2 class="text-2xl font-bold text-white mb-2">Pilih Mode Permainan</h2>
+            <p class="text-gray-400 text-sm mb-6">Apa yang ingin Anda tangkap hari ini?</p>
+            
+            <div class="grid grid-cols-1 gap-4 mb-4">
+                <button onclick="selectMode('huruf')" class="bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-400 hover:to-blue-500 text-white font-bold py-4 px-6 rounded-xl text-xl transition-transform hover:scale-105 shadow-lg flex items-center justify-between">
+                    <span>🔤 Huruf A - Z</span>
+                    <span class="text-sm bg-black bg-opacity-30 px-3 py-1 rounded-full">Besar & Kecil</span>
+                </button>
+                <button onclick="selectMode('angka')" class="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold py-4 px-6 rounded-xl text-xl transition-transform hover:scale-105 shadow-lg flex items-center justify-between">
+                    <span>🔢 Angka 0 - 30</span>
+                    <span class="text-sm bg-black bg-opacity-30 px-3 py-1 rounded-full">Matematika</span>
+                </button>
+                <button onclick="selectMode('warna')" class="bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-400 hover:to-orange-400 text-white font-bold py-4 px-6 rounded-xl text-xl transition-transform hover:scale-105 shadow-lg flex items-center justify-between">
+                    <span>🎨 Aneka Warna</span>
+                    <span class="text-sm bg-black bg-opacity-30 px-3 py-1 rounded-full">Visual</span>
+                </button>
+            </div>
+            <button onclick="backToTimeSelection()" class="mt-2 text-gray-400 hover:text-white text-sm underline pb-2">Kembali Pilih Waktu</button>
+        </div>
+
+        <!-- MENU PILIH TARGET -->
+        <div id="target-selection" class="hidden pointer-events-auto bg-gray-900 bg-opacity-95 p-6 rounded-3xl shadow-2xl text-center backdrop-blur-md border border-gray-700 max-w-xl w-full mx-4 transition-all duration-500 max-h-[90vh] flex-col">
+            <h2 id="target-title" class="text-2xl font-bold text-white mb-2">Pilih Target Anda</h2>
+            <p class="text-gray-400 text-sm mb-4">Pilih satu target utama untuk ditangkap.</p>
+            
+            <div id="target-grid" class="grid grid-cols-4 sm:grid-cols-6 gap-3 overflow-y-auto custom-scrollbar p-2 mb-4 max-h-[60vh]"></div>
+
+            <button onclick="backToModeSelection()" id="back-btn" class="mt-2 text-gray-400 hover:text-white text-sm underline pb-2">Kembali Pilih Mode</button>
+            <p id="loading-text" class="text-yellow-400 mt-2 text-sm hidden font-semibold animate-pulse">Menghidupkan Kamera & AI (Mohon tunggu)...</p>
+        </div>
+
+        <!-- HUD GAME -->
+        <div id="hud" class="absolute top-0 left-0 w-full p-4 flex justify-between items-start hidden pointer-events-none">
+            <div class="flex gap-4">
+                <div class="bg-blue-900 bg-opacity-80 backdrop-blur-md rounded-2xl p-4 border border-blue-500 shadow-lg min-w-[100px] text-center flex flex-col items-center justify-center">
+                    <p class="text-blue-200 text-[10px] font-bold uppercase tracking-widest mb-1">TARGET</p>
+                    <div id="target-display" class="text-3xl font-black text-white">A</div>
+                </div>
+                <div class="bg-gray-900 bg-opacity-75 backdrop-blur-md rounded-2xl p-4 border border-gray-700 shadow-lg min-w-[100px] text-center">
+                    <p class="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1">SKOR</p>
+                    <p id="score-display" class="text-4xl font-black text-white transition-colors duration-300">0</p>
+                </div>
+            </div>
+            
+            <div class="flex flex-col gap-2 items-end">
+                <div id="timer-box" class="bg-gray-900 bg-opacity-75 backdrop-blur-md rounded-2xl p-3 border border-gray-700 shadow-lg min-w-[100px] text-center">
+                    <p class="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1">WAKTU</p>
+                    <p id="timer-display" class="text-3xl font-mono font-bold text-yellow-400">03:00</p>
+                </div>
+                <button onclick="exitFullscreenAndReload()" class="bg-red-500 bg-opacity-80 text-white text-xs font-bold px-3 py-2 rounded-xl pointer-events-auto hover:bg-red-600 shadow-lg backdrop-blur-md transition-transform hover:scale-105 mt-1">Akhiri Game</button>
             </div>
         </div>
+
+        <!-- GAME OVER -->
+        <div id="game-over" class="hidden pointer-events-auto bg-gray-900 bg-opacity-95 p-8 rounded-3xl shadow-2xl text-center backdrop-blur-md border border-gray-700 max-w-md w-full mx-4 transform scale-105">
+            <h1 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-yellow-500 mb-2">WAKTU HABIS!</h1>
+            <p class="text-gray-300 mb-6 text-lg">Permainan Selesai.</p>
+            
+            <div class="bg-gray-800 p-6 rounded-2xl mb-6 border border-gray-700">
+                <p class="text-gray-400 text-sm uppercase tracking-widest mb-2">Skor Akhir Anda</p>
+                <p id="final-score" class="text-6xl font-black text-white">0</p>
+            </div>
+
+            <button onclick="exitFullscreenAndReload()" class="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold py-4 px-6 rounded-2xl shadow-lg transition-all transform hover:scale-105 active:scale-95 text-xl">Main Lagi</button>
+        </div>
+
     </div>
 
-    <!-- Elemen Video Kamera & Canvas Permainan -->
+    <!-- Elemen Media -->
     <video id="webcam" autoplay playsinline></video>
     <canvas id="game-canvas"></canvas>
 
     <script>
-        // --- DEKLARASI VARIABEL ---
         const videoElement = document.getElementById('webcam');
         const canvasElement = document.getElementById('game-canvas');
         const canvasCtx = canvasElement.getContext('2d');
         
         const startMenu = document.getElementById('start-menu');
-        const startBtn = document.getElementById('start-btn');
+        const timeSelectionMenu = document.getElementById('time-selection');
+        const modeSelectionMenu = document.getElementById('mode-selection');
+        const targetSelectionMenu = document.getElementById('target-selection');
+        const targetGrid = document.getElementById('target-grid');
         const loadingText = document.getElementById('loading-text');
+        
         const hud = document.getElementById('hud');
         const scoreDisplay = document.getElementById('score-display');
-        
-        let isGameRunning = false;
-        let score = 0;
-        let balls = [];
-        let particles = [];
-        let indexFingerTips = []; // Menyimpan koordinat {x, y} ujung jari telunjuk
-        let lastFrameTime = performance.now();
-        let spawnTimer = 0;
-        let clickRipples = []; // Menyimpan animasi efek klik
-        let handClickStates = {}; // Menyimpan status klik per tangan
+        const targetDisplay = document.getElementById('target-display');
+        const timerDisplay = document.getElementById('timer-display');
+        const timerBox = document.getElementById('timer-box');
+        const gameOverScreen = document.getElementById('game-over');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const backBtn = document.getElementById('back-btn');
 
-        // Atur ukuran canvas mengikuti layar
-        function resizeCanvas() {
-            canvasElement.width = window.innerWidth;
-            canvasElement.height = window.innerHeight;
+        // AUDIO
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
         }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
 
-        // --- SISTEM MEDIA PIPE (AI PELACAKAN TANGAN) ---
-        const hands = new Hands({locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-        }});
-        
-        hands.setOptions({
-            maxNumHands: 2, // Lacak hingga 2 tangan
-            modelComplexity: 1, // Keseimbangan antara kecepatan & akurasi
-            minDetectionConfidence: 0.6,
-            minTrackingConfidence: 0.6
-        });
+        function playCorrectSound() {
+            if(!audioCtx) return;
+            const osc = audioCtx.createOscillator(); const gainNode = audioCtx.createGain();
+            osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.type = 'sine'; const now = audioCtx.currentTime;
+            osc.frequency.setValueAtTime(523.25, now); osc.frequency.setValueAtTime(659.25, now + 0.1); osc.frequency.setValueAtTime(783.99, now + 0.2);
+            gainNode.gain.setValueAtTime(0, now); gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05); gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+            osc.start(now); osc.stop(now + 0.4);
+        }
 
-        // Callback ketika AI selesai memproses satu frame kamera
-        hands.onResults((results) => {
-            // Gambar feed kamera sebagai latar belakang
-            canvasCtx.save();
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            // Gambar full screen
-            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-            canvasCtx.restore();
+        function playWrongSound() {
+            if(!audioCtx) return;
+            const osc = audioCtx.createOscillator(); const gainNode = audioCtx.createGain();
+            osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.type = 'square'; const now = audioCtx.currentTime;
+            osc.frequency.setValueAtTime(150, now); osc.frequency.exponentialRampToValueAtTime(30, now + 0.3);
+            gainNode.gain.setValueAtTime(0.5, now); gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+            osc.start(now); osc.stop(now + 0.4);
+        }
 
-            // Ekstrak posisi jari dan deteksi gestur
-            indexFingerTips = [];
-            if (results.multiHandLandmarks) {
-                results.multiHandLandmarks.forEach((landmarks, index) => {
-                    const indexTip = landmarks[8];
-                    const indexPIP = landmarks[6];
-                    const middleTip = landmarks[12];
-                    const middlePIP = landmarks[10];
-                    const thumbTip = landmarks[4];
+        // DATA
+        const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split('');
+        const NUMBERS = Array.from({length: 31}, (_, i) => i.toString());
+        const COLORS = [
+            { id: 'Merah', hex: '#ef4444' }, { id: 'Biru', hex: '#3b82f6' }, { id: 'Hijau', hex: '#22c55e' }, { id: 'Kuning', hex: '#eab308' },
+            { id: 'Ungu', hex: '#a855f7' }, { id: 'Oranye', hex: '#f97316' }, { id: 'Pink', hex: '#ec4899' }, { id: 'Putih', hex: '#ffffff' },
+            { id: 'Abu-abu', hex: '#6b7280' }, { id: 'Coklat', hex: '#78350f' }
+        ];
 
-                    // 1. Deteksi "Dua Jari Diangkat" (Telunjuk & Tengah tegak)
-                    const isIndexRaised = indexTip.y < indexPIP.y;
-                    const isMiddleRaised = middleTip.y < middlePIP.y;
+        let currentMode = ''; let isGameRunning = false; let score = 0; let targetData = null; let timeRemaining = 180; let selectedTime = 180;
+        let bubbles = []; let particles = []; let indexFingerTips = []; 
+        let lastFrameTime = performance.now(); let spawnTimer = 0;
+        let handsReady = false;
 
-                    // Hilangkan efek jari jika dua jari diangkat
-                    if (isIndexRaised && isMiddleRaised) {
-                        handClickStates[index] = false;
-                        return; // Skip iterasi ini, tidak digambar sebagai indikator
-                    }
-
-                    // 2. Deteksi Gestur Menekuk (Klik)
-                    // Jarak antara ujung jempol dan telunjuk untuk mendeteksi gestur klik (pinch) dengan sangat stabil
-                    const distPinch = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
-                    const isClicking = distPinch < 0.06; // Threshold jarak kedekatan
-
-                    indexFingerTips.push({
-                        // x dan y dari MediaPipe adalah nilai relatif (0.0 - 1.0)
-                        x: indexTip.x * canvasElement.width,
-                        y: indexTip.y * canvasElement.height,
-                        isClicking: isClicking,
-                        handIndex: index
-                    });
-                });
-            }
-
-            // Jika game berjalan, jalankan logika game
-            if (isGameRunning) {
-                updateAndDrawGame();
+        // FUNGSI PERBAIKAN: Menampilkan Skor HUD
+        function updateScoreDisplay() {
+            scoreDisplay.innerText = score;
+            if (score < 0) {
+                scoreDisplay.classList.add('text-red-500');
+                scoreDisplay.classList.remove('text-white');
             } else {
-                // Jika game belum jalan tapi kamera sudah, beri tahu sistem bahwa pemuatan selesai
-                if(loadingText.style.display !== 'none') {
-                    startGame();
-                }
+                scoreDisplay.classList.add('text-white');
+                scoreDisplay.classList.remove('text-red-500');
             }
-        });
-
-        const camera = new Camera(videoElement, {
-            onFrame: async () => {
-                await hands.send({image: videoElement});
-            },
-            width: 1280,
-            height: 720
-        });
-
-        // --- KONTROL UI ---
-        startBtn.addEventListener('click', () => {
-            startBtn.style.display = 'none';
-            loadingText.style.display = 'block';
-            camera.start().catch(err => {
-                alert("Gagal mengakses kamera. Pastikan Anda memberikan izin akses kamera ke situs ini.");
-                console.error(err);
-                startBtn.style.display = 'block';
-                loadingText.style.display = 'none';
-            });
-        });
-
-        function startGame() {
-            startMenu.style.display = 'none';
-            hud.style.display = 'flex';
-            isGameRunning = true;
-            score = 0;
-            updateScoreDisplay();
-            lastFrameTime = performance.now();
         }
 
-        // --- LOGIKA GAME (BOLA & TABRAKAN) ---
-        
-        function spawnBall() {
-            const isRed = Math.random() < 0.35; // 35% kemungkinan bola merah (rintangan)
-            const radius = isRed ? Math.random() * 15 + 25 : Math.random() * 20 + 30; // Merah sedikit lebih kecil rata-rata
-            balls.push({
-                x: Math.random() * (canvasElement.width - radius * 2) + radius, // Posisi X acak
-                y: -radius - 10, // Mulai dari atas layar, di luar pandangan
-                radius: radius,
-                type: isRed ? 'bad' : 'good',
-                color: isRed ? '#ef4444' : '#22c55e',
-                speedY: Math.random() * 3 + 3, // Kecepatan jatuh
-                speedX: (Math.random() - 0.5) * 1.5 // Sedikit melayang ke samping
-            });
-        }
-
+        // FUNGSI PERBAIKAN: Efek Partikel saat Menyentuh Objek
         function createParticles(x, y, color) {
-            for(let i=0; i<15; i++){
+            for (let i = 0; i < 20; i++) {
                 particles.push({
-                    x: x, y: y,
-                    vx: (Math.random() - 0.5) * 10,
-                    vy: (Math.random() - 0.5) * 10,
-                    life: 1.0,
+                    x: x, 
+                    y: y, 
+                    vx: (Math.random() - 0.5) * 12, 
+                    vy: (Math.random() - 0.5) * 12, 
+                    life: 1.0, 
                     color: color
                 });
             }
         }
 
+        // FUNGSI PERBAIKAN: Teks Melayang "+10" / "-10"
         function showFloatingText(x, y, text, isPositive) {
             const el = document.createElement('div');
-            el.className = `score-pop ${isPositive ? 'text-green-400' : 'text-red-500'}`;
+            el.className = 'score-pop';
             el.innerText = text;
-            // Ingat: Canvas kita di-mirror dengan CSS (scaleX(-1)), jadi kita harus menyesuaikan posisi UI HTML
-            // Agar teks muncul di posisi jari yang benar (karena UI layer TIDAK di mirror)
-            const mirroredX = window.innerWidth - x; 
+            el.style.color = isPositive ? '#4ade80' : '#ef4444';
             
-            el.style.left = `${mirroredX - 20}px`;
+            // Perhitungan kompensasi khusus karena canvas HTML terbalik efek cermin (scaleX(-1))
+            const visualX = window.innerWidth - x;
+            
+            el.style.left = `${visualX - 25}px`;
             el.style.top = `${y - 20}px`;
             document.getElementById('ui-layer').appendChild(el);
             
+            // Hapus elemen saat animasi selesai
             setTimeout(() => {
-                el.remove();
+                if(el.parentNode) el.parentNode.removeChild(el);
             }, 1000);
         }
 
-        function updateScoreDisplay() {
-            scoreDisplay.innerText = score;
-            // Ganti warna teks skor sementara jika minus
-            if(score < 0) scoreDisplay.classList.add('text-red-400');
-            else scoreDisplay.classList.remove('text-red-400');
+        function resizeCanvas() { canvasElement.width = window.innerWidth; canvasElement.height = window.innerHeight; }
+        window.addEventListener('resize', resizeCanvas); resizeCanvas();
+
+        function requestFullScreen() {
+            const docElm = document.documentElement;
+            if (docElm.requestFullscreen) docElm.requestFullscreen();
+            else if (docElm.mozRequestFullScreen) docElm.mozRequestFullScreen();
+            else if (docElm.webkitRequestFullScreen) docElm.webkitRequestFullScreen();
+        }
+        function exitFullscreenAndReload() {
+            if (document.exitFullscreen) document.exitFullscreen();
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            setTimeout(() => location.reload(), 300);
         }
 
-        // Loop Game Utama (Dipanggil setiap frame kamera dari MediaPipe)
-        function updateAndDrawGame() {
-            const now = performance.now();
-            const dt = (now - lastFrameTime) / 1000;
-            lastFrameTime = now;
+        // NAVIGATION
+        document.getElementById('start-btn').addEventListener('click', () => {
+            initAudio(); requestFullScreen();
+            startMenu.style.display = 'none'; timeSelectionMenu.style.display = 'flex';
+        });
 
-            // 1. Munculkan Bola Baru
-            spawnTimer += dt;
-            if (spawnTimer > 0.8) { // Spawn setiap 0.8 detik
-                spawnBall();
-                spawnTimer = 0;
+        function selectTime(seconds) {
+            initAudio(); selectedTime = seconds;
+            timeSelectionMenu.style.display = 'none'; modeSelectionMenu.style.display = 'flex';
+        }
+
+        // Perbaikan animasi Menu saat kembali
+        function backToStartMenu() { timeSelectionMenu.style.display = 'none'; startMenu.style.display = 'block'; }
+        function backToTimeSelection() { modeSelectionMenu.style.display = 'none'; timeSelectionMenu.style.display = 'flex'; }
+
+        function selectMode(mode) {
+            initAudio(); currentMode = mode;
+            modeSelectionMenu.style.display = 'none'; targetSelectionMenu.style.display = 'flex';
+            const titleEl = document.getElementById('target-title');
+            if(mode === 'huruf') titleEl.innerText = "Pilih Huruf Target";
+            else if(mode === 'angka') titleEl.innerText = "Pilih Angka Target";
+            else if(mode === 'warna') titleEl.innerText = "Pilih Warna Target";
+            populateTargetGrid();
+        }
+
+        function backToModeSelection() { targetSelectionMenu.style.display = 'none'; modeSelectionMenu.style.display = 'flex'; }
+
+        function populateTargetGrid() {
+            targetGrid.innerHTML = ''; let items = [];
+            if (currentMode === 'huruf') items = ALPHABET; else if (currentMode === 'angka') items = NUMBERS; else if (currentMode === 'warna') items = COLORS;
+            targetGrid.className = `grid gap-3 overflow-y-auto custom-scrollbar p-2 mb-4 max-h-[60vh] ${currentMode === 'angka' ? 'grid-cols-5 sm:grid-cols-7' : 'grid-cols-4 sm:grid-cols-6'}`;
+
+            items.forEach(item => {
+                const btn = document.createElement('button');
+                btn.className = "bg-gray-800 border border-gray-600 hover:bg-blue-600 hover:border-blue-400 text-white font-bold py-3 rounded-xl transition-all shadow-sm transform hover:scale-110 active:scale-95 flex flex-col items-center justify-center min-h-[60px]";
+                if (currentMode === 'warna') {
+                    btn.innerHTML = `<div class="w-8 h-8 rounded-full shadow-inner mb-1 border border-gray-400" style="background-color: ${item.hex}"></div><span class="text-[10px] uppercase">${item.id}</span>`;
+                    btn.onclick = () => selectFinalTarget(item); 
+                } else {
+                    btn.innerText = item; btn.className += " text-xl"; btn.onclick = () => selectFinalTarget(item); 
+                }
+                targetGrid.appendChild(btn);
+            });
+        }
+
+        function selectFinalTarget(target) {
+            initAudio(); targetData = target;
+            targetDisplay.innerHTML = '';
+            if (currentMode === 'warna') { targetDisplay.innerHTML = `<div class="w-10 h-10 rounded-full shadow-lg border-2 border-white" style="background-color: ${target.hex}"></div>`; } 
+            else { targetDisplay.innerText = target; }
+            
+            targetGrid.style.display = 'none'; backBtn.style.display = 'none';
+            document.querySelector('#target-selection h2').innerText = "Mempersiapkan AI...";
+            document.querySelector('#target-selection p').style.display = 'none';
+            loadingText.style.display = 'block';
+
+            camera.start().catch(err => { alert("Gagal mengakses kamera. Pastikan memberikan izin!"); location.reload(); });
+        }
+
+        function startGamePlay() {
+            loadingText.style.display = 'none'; targetSelectionMenu.style.display = 'none'; hud.style.display = 'flex';
+            isGameRunning = true; score = 0; timeRemaining = selectedTime; bubbles = [];
+            updateScoreDisplay(); lastFrameTime = performance.now();
+        }
+
+        function showGameOverScreen() {
+            isGameRunning = false; hud.style.display = 'none'; gameOverScreen.style.display = 'block';
+            finalScoreDisplay.innerText = score; if(score < 0) finalScoreDisplay.classList.replace('text-white', 'text-red-500');
+        }
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60); const s = Math.floor(seconds % 60);
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        // SPAWNER GELEMBUNG
+        function spawnBubble() {
+            let isTargetObj = Math.random() < 0.35; let spawnedData;
+            if (currentMode === 'huruf') {
+                if (isTargetObj) { spawnedData = targetData; } 
+                else { do { spawnedData = ALPHABET[Math.floor(Math.random() * ALPHABET.length)]; } while (spawnedData.toUpperCase() === targetData.toUpperCase()); }
+                if (Math.random() < 0.5) spawnedData = spawnedData.toLowerCase(); 
+            } 
+            else if (currentMode === 'angka') {
+                if (isTargetObj) { spawnedData = targetData; } 
+                else { do { spawnedData = NUMBERS[Math.floor(Math.random() * NUMBERS.length)]; } while (spawnedData === targetData); }
+            }
+            else if (currentMode === 'warna') {
+                if (isTargetObj) { spawnedData = targetData; } 
+                else { do { spawnedData = COLORS[Math.floor(Math.random() * COLORS.length)]; } while (spawnedData.id === targetData.id); }
+            }
+            const radius = currentMode === 'warna' ? Math.random() * 10 + 35 : Math.random() * 15 + 35; 
+            bubbles.push({
+                x: Math.random() * (canvasElement.width - radius * 2) + radius, y: -radius - 50, radius: radius,
+                data: spawnedData, isTarget: isTargetObj, speedY: Math.random() * 3 + 3, speedX: (Math.random() - 0.5) * 2, rotation: 0, rotSpeed: (Math.random() - 0.5) * 0.1
+            });
+        }
+
+        // --- SISTEM PELACAKAN JARI TANGAN (HANDS AI) ---
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
+
+        hands.onResults((results) => {
+            handsReady = true;
+            
+            // Pastikan gambar video ada dan berukuran valid
+            if (results.image && results.image.width > 0) {
+                const vW = results.image.width;
+                const vH = results.image.height;
+                const canvasRatio = canvasElement.width / canvasElement.height;
+                const videoRatio = vW / vH;
+                let drawWidth, drawHeight, startX, startY;
+
+                // Matematika pemetaan presisi tinggi (cover object-fit)
+                if (canvasRatio > videoRatio) { 
+                    drawWidth = canvasElement.width; drawHeight = canvasElement.width / videoRatio; startX = 0; startY = (canvasElement.height - drawHeight) / 2; 
+                } else { 
+                    drawHeight = canvasElement.height; drawWidth = canvasElement.height * videoRatio; startX = (canvasElement.width - drawWidth) / 2; startY = 0; 
+                }
+                
+                let newFingerTips = [];
+                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                    results.multiHandLandmarks.forEach((landmarks) => {
+                        // Titik Acuan MediaPipe
+                        const wrist = landmarks[0];           // Pergelangan Tangan
+                        const indexMCP = landmarks[5];         // Pangkal Telunjuk (Knuckle)
+                        const indexTip = landmarks[8];         // Ujung Telunjuk
+                        const middleMCP = landmarks[9];        // Pangkal Jari Tengah
+                        const middleTip = landmarks[12];       // Ujung Jari Tengah
+                        const ringMCP = landmarks[13];         // Pangkal Jari Manis
+                        const ringTip = landmarks[16];         // Ujung Jari Manis
+
+                        // PERBAIKAN LOGIKA AI: 
+                        // Mengukur dari ujung jari ke pangkal (MCP) alih-alih sendi tengah (PIP) agar 
+                        // deteksi lurus atau ditekuk jauh lebih sensitif dan akurat di segala sudut.
+                        const getDist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
+                        
+                        const isIndexExtended = getDist(indexTip, wrist) > getDist(indexMCP, wrist) * 1.25;
+                        const isMiddleExtended = getDist(middleTip, wrist) > getDist(middleMCP, wrist) * 1.25;
+                        const isRingExtended = getDist(ringTip, wrist) > getDist(ringMCP, wrist) * 1.25;
+
+                        // V-Sign (Pause): Telunjuk Lurus, Tengah Lurus, Manis Ditekuk
+                        let isVSign = isIndexExtended && isMiddleExtended && !isRingExtended;
+
+                        // Tentukan Status dan Pesan Kursor
+                        let fingerActive = false;
+                        let msg = "JARI DITEKUK";
+
+                        if (isVSign) {
+                            fingerActive = false;
+                            msg = "JEDA (✌️)";
+                        } else if (isIndexExtended) {
+                            fingerActive = true;
+                            msg = "AKTIF";
+                        }
+
+                        // Daftarkan koordinat kursor ke dalam game
+                        newFingerTips.push({ 
+                            x: (indexTip.x * drawWidth) + startX, 
+                            y: (indexTip.y * drawHeight) + startY, 
+                            active: fingerActive, 
+                            message: msg 
+                        });
+                    });
+                }
+                indexFingerTips = newFingerTips;
             }
 
-            // 2. Perbarui & Gambar Bola
-            for (let i = balls.length - 1; i >= 0; i--) {
-                let b = balls[i];
-                b.y += b.speedY;
-                b.x += b.speedX;
+            // Memulai game setelah AI siap membaca setidaknya 1 frame
+            if (handsReady && loadingText.style.display === 'block' && !isGameRunning) {
+                startGamePlay();
+            }
+        });
 
-                // Pantulkan sedikit jika menabrak dinding samping
+        // CAMERA - Pemrosesan ringan & stabil
+        let isProcessingCamera = false;
+        const camera = new Camera(videoElement, { 
+            onFrame: async () => { 
+                if (isProcessingCamera) return; 
+                isProcessingCamera = true;
+                try {
+                    await hands.send({image: videoElement});
+                } catch (error) {
+                    console.error("AI Error:", error);
+                } finally {
+                    isProcessingCamera = false;
+                }
+            }, 
+            width: 640, height: 480 
+        });
+
+        // RENDER LOOP TERPISAH DARI AI (Agar Grafis Mulus 60FPS)
+        function renderLoop() {
+            requestAnimationFrame(renderLoop);
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+            if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
+                const vW = videoElement.videoWidth;
+                const vH = videoElement.videoHeight;
+                const videoRatio = vW / vH;
+                const canvasRatio = canvasElement.width / canvasElement.height;
+                let drawWidth, drawHeight, startX, startY;
+                if (canvasRatio > videoRatio) { drawWidth = canvasElement.width; drawHeight = canvasElement.width / videoRatio; startX = 0; startY = (canvasElement.height - drawHeight) / 2; } 
+                else { drawHeight = canvasElement.height; drawWidth = canvasElement.height * videoRatio; startX = (canvasElement.width - drawWidth) / 2; startY = 0; }
+                canvasCtx.drawImage(videoElement, startX, startY, drawWidth, drawHeight);
+            }
+
+            if (isGameRunning) updateAndDrawGame();
+            canvasCtx.restore();
+        }
+        renderLoop();
+
+        // GAME LOGIC
+        function updateAndDrawGame() {
+            const now = performance.now(); const dt = (now - lastFrameTime) / 1000; lastFrameTime = now;
+
+            timeRemaining -= dt;
+            if (timeRemaining <= 0) { timeRemaining = 0; showGameOverScreen(); return; }
+            
+            timerDisplay.innerText = formatTime(timeRemaining);
+            if (timeRemaining < 10) { timerBox.classList.add('border-red-500'); timerDisplay.classList.add('text-red-500'); timerDisplay.classList.remove('text-yellow-400'); }
+
+            spawnTimer += dt; if (spawnTimer > 0.8) { spawnBubble(); spawnTimer = 0; }
+
+            for (let i = bubbles.length - 1; i >= 0; i--) {
+                let b = bubbles[i];
+                b.y += b.speedY * (dt * 60); b.x += b.speedX * (dt * 60); b.rotation += b.rotSpeed * (dt * 60);
                 if (b.x < b.radius || b.x > canvasElement.width - b.radius) b.speedX *= -1;
 
-                // Deteksi Tabrakan (Jari vs Bola)
+                // Cek tabrakan gelembung dengan ujung jari yang AKTIF
                 let isTouched = false;
                 for (let pointer of indexFingerTips) {
-                    // Hitung jarak antara ujung jari dan pusat bola (menggunakan Teorema Pythagoras)
-                    const dist = Math.hypot(pointer.x - b.x, pointer.y - b.y);
-                    // Radius jari fiktif = 15px
-                    if (dist < b.radius + 15) { 
-                        isTouched = true;
-                        break;
+                    if (Math.hypot(pointer.x - b.x, pointer.y - b.y) < b.radius + 15) { 
+                        if (pointer.active) { isTouched = true; break; } 
                     }
                 }
 
                 if (isTouched) {
-                    // Terkena jari!
-                    if (b.type === 'good') {
-                        score += 10;
-                        showFloatingText(b.x, b.y, "+10", true);
+                    if (b.isTarget) {
+                        playCorrectSound(); score += 10; showFloatingText(b.x, b.y, "+10", true);
+                        createParticles(b.x, b.y, currentMode === 'warna' ? b.data.hex : '#4ade80');
                     } else {
-                        score -= 10;
-                        showFloatingText(b.x, b.y, "-10", false);
-                        // Efek flash layar merah ringan
-                        canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.3)';
-                        canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
+                        playWrongSound(); score -= 10; showFloatingText(b.x, b.y, "-10", false);
+                        createParticles(b.x, b.y, '#ef4444'); 
+                        canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.4)'; canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
                     }
-                    
-                    updateScoreDisplay();
-                    createParticles(b.x, b.y, b.color);
-                    balls.splice(i, 1); // Hapus bola
-                    continue;
+                    updateScoreDisplay(); bubbles.splice(i, 1); continue;
                 }
 
-                // Hapus bola jika keluar layar bawah
-                if (b.y > canvasElement.height + b.radius) {
-                    balls.splice(i, 1);
-                    continue;
-                }
+                if (b.y > canvasElement.height + b.radius) { bubbles.splice(i, 1); continue; }
 
-                // Gambar Bola
-                canvasCtx.beginPath();
-                canvasCtx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-                canvasCtx.fillStyle = b.color;
-                canvasCtx.fill();
-                
-                // Tambahkan efek cahaya (Glow) atau gradient sederhana
-                canvasCtx.lineWidth = 4;
-                canvasCtx.strokeStyle = b.type === 'good' ? '#4ade80' : '#f87171';
-                canvasCtx.stroke();
-                
-                // Highlight cahaya internal
-                canvasCtx.beginPath();
-                canvasCtx.arc(b.x - b.radius*0.3, b.y - b.radius*0.3, b.radius*0.2, 0, Math.PI * 2);
-                canvasCtx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-                canvasCtx.fill();
+                canvasCtx.save(); canvasCtx.translate(b.x, b.y); canvasCtx.rotate(b.rotation);
+                if (currentMode === 'warna') {
+                    canvasCtx.beginPath(); canvasCtx.arc(0, 0, b.radius, 0, Math.PI * 2); canvasCtx.fillStyle = b.data.hex; canvasCtx.fill();
+                    canvasCtx.lineWidth = 4; canvasCtx.strokeStyle = '#ffffff'; canvasCtx.stroke();
+                    canvasCtx.beginPath(); canvasCtx.arc(-b.radius*0.3, -b.radius*0.3, b.radius*0.3, 0, Math.PI * 2); canvasCtx.fillStyle = 'rgba(255, 255, 255, 0.4)'; canvasCtx.fill();
+                } else {
+                    canvasCtx.beginPath(); canvasCtx.arc(0, 0, b.radius, 0, Math.PI * 2); canvasCtx.fillStyle = 'rgba(30, 64, 175, 0.6)'; canvasCtx.fill();
+                    canvasCtx.lineWidth = 3; canvasCtx.strokeStyle = 'rgba(96, 165, 250, 0.9)'; canvasCtx.stroke();
+                    canvasCtx.beginPath(); canvasCtx.arc(-b.radius*0.3, -b.radius*0.3, b.radius*0.3, 0, Math.PI * 2); canvasCtx.fillStyle = 'rgba(255, 255, 255, 0.3)'; canvasCtx.fill();
+                    canvasCtx.scale(-1, 1); canvasCtx.fillStyle = '#ffffff'; canvasCtx.font = `bold ${b.radius}px 'Segoe UI', Arial`; canvasCtx.textAlign = 'center'; canvasCtx.textBaseline = 'middle';
+                    canvasCtx.shadowColor = 'rgba(0,0,0,0.8)'; canvasCtx.shadowBlur = 5; canvasCtx.fillText(b.data, 0, 0);
+                }
+                canvasCtx.restore();
             }
 
-            // 3. Perbarui & Gambar Partikel
             for (let i = particles.length - 1; i >= 0; i--) {
-                let p = particles[i];
-                p.x += p.vx;
-                p.y += p.vy;
-                p.life -= dt * 2; // Partikel mati dalam 0.5 detik
-
-                if (p.life <= 0) {
-                    particles.splice(i, 1);
-                    continue;
-                }
-
-                canvasCtx.globalAlpha = p.life;
-                canvasCtx.beginPath();
-                canvasCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-                canvasCtx.fillStyle = p.color;
-                canvasCtx.fill();
+                let p = particles[i]; p.x += p.vx * (dt * 60); p.y += p.vy * (dt * 60); p.life -= dt * 3.0; 
+                if (p.life <= 0) { particles.splice(i, 1); continue; }
+                canvasCtx.globalAlpha = p.life; canvasCtx.beginPath(); canvasCtx.arc(p.x, p.y, 6, 0, Math.PI * 2); canvasCtx.fillStyle = p.color; canvasCtx.fill();
             }
-            canvasCtx.globalAlpha = 1.0; // Reset alpha
+            canvasCtx.globalAlpha = 1.0;
 
-            // 4. Gambar Indikator Jari & Efek Klik
+            // RENDER JARI & KURSOR VISUAL
             for (let pointer of indexFingerTips) {
-                // Memicu efek klik (Ripple) saat jari baru saja ditekuk
-                if (pointer.isClicking && !handClickStates[pointer.handIndex]) {
-                    clickRipples.push({ x: pointer.x, y: pointer.y, radius: 15, alpha: 1.0 });
-                    handClickStates[pointer.handIndex] = true;
-                } else if (!pointer.isClicking) {
-                    handClickStates[pointer.handIndex] = false;
+                canvasCtx.beginPath(); canvasCtx.arc(pointer.x, pointer.y, 18, 0, Math.PI * 2);
+                if (pointer.active) {
+                    canvasCtx.fillStyle = 'rgba(56, 189, 248, 0.8)'; canvasCtx.fill(); canvasCtx.lineWidth = 4;
+                    canvasCtx.strokeStyle = '#ffffff'; canvasCtx.shadowColor = '#38bdf8'; canvasCtx.shadowBlur = 15; canvasCtx.stroke();
+                } else {
+                    canvasCtx.fillStyle = 'rgba(156, 163, 175, 0.4)'; canvasCtx.fill(); canvasCtx.lineWidth = 2;
+                    canvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; canvasCtx.stroke();
                 }
+                canvasCtx.shadowBlur = 0; 
+                canvasCtx.beginPath(); canvasCtx.arc(pointer.x, pointer.y, 4, 0, Math.PI * 2);
+                canvasCtx.fillStyle = pointer.active ? '#ffffff' : 'rgba(255,255,255,0.5)'; canvasCtx.fill();
 
-                canvasCtx.beginPath();
-                canvasCtx.arc(pointer.x, pointer.y, 15, 0, Math.PI * 2);
-                // Ubah warna kursor saat sedang mengeklik
-                canvasCtx.fillStyle = pointer.isClicking ? 'rgba(255, 255, 255, 0.8)' : 'rgba(56, 189, 248, 0.5)';
-                canvasCtx.fill();
-                canvasCtx.lineWidth = 2;
-                canvasCtx.strokeStyle = pointer.isClicking ? '#ffffff' : '#38bdf8';
-                canvasCtx.stroke();
-                
-                // Titik inti jari
-                canvasCtx.beginPath();
-                canvasCtx.arc(pointer.x, pointer.y, 4, 0, Math.PI * 2);
-                canvasCtx.fillStyle = '#ffffff';
-                canvasCtx.fill();
-            }
-
-            // 5. Animasi Efek Gelombang Klik (Ripple)
-            for (let i = clickRipples.length - 1; i >= 0; i--) {
-                let r = clickRipples[i];
-                r.radius += dt * 200; // Gelombang membesar cepat
-                r.alpha -= dt * 3.0;  // Gelombang memudar cepat
-
-                if (r.alpha <= 0) {
-                    clickRipples.splice(i, 1);
-                    continue;
-                }
-
-                canvasCtx.beginPath();
-                canvasCtx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
-                canvasCtx.strokeStyle = `rgba(255, 255, 255, ${r.alpha})`;
-                canvasCtx.lineWidth = 4;
-                canvasCtx.stroke();
+                // Teks Penanda Jari
+                canvasCtx.save(); canvasCtx.translate(pointer.x, pointer.y - 35); canvasCtx.scale(-1, 1); 
+                canvasCtx.fillStyle = pointer.active ? '#4ade80' : '#f87171'; canvasCtx.font = "bold 14px 'Segoe UI', Arial"; canvasCtx.textAlign = "center";
+                canvasCtx.shadowColor = 'rgba(0,0,0,1)'; canvasCtx.shadowBlur = 6; canvasCtx.fillText(pointer.message, 0, 0);
+                canvasCtx.restore();
             }
         }
     </script>
