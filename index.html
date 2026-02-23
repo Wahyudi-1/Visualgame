@@ -74,7 +74,7 @@
                 <p>⏱️ Anda memiliki waktu <span class="text-yellow-400 font-bold">3 Menit</span>.</p>
                 <p>🎯 Pilih mode permainan dan target yang ingin ditangkap untuk <span class="text-green-400 font-bold">+10 Poin</span>.</p>
                 <p>💥 Hati-hati! Menyentuh objek yang salah akan mengurangi <span class="text-red-500 font-bold">-10 Poin</span>.</p>
-                <p>😁 <span class="text-green-400 font-bold">Tersenyumlah</span> untuk mengaktifkan kursor agar bisa menangkap!</p>
+                <p>⚙️ <span class="text-green-400 font-bold">Pilih Kontrol Unikmu!</span> Mainkan dengan jari, senyuman, kedipan mata, atau buka mulut.</p>
                 <p>🔊 Pastikan volume Anda menyala untuk efek suara!</p>
             </div>
 
@@ -93,6 +93,27 @@
                     </svg>
                     0813-3657-8058
                 </a>
+            </div>
+        </div>
+
+        <!-- Menu Pilih Metode Kontrol (BARU) -->
+        <div id="control-selection" class="hidden pointer-events-auto bg-gray-900 bg-opacity-95 p-6 rounded-3xl shadow-2xl text-center backdrop-blur-md border border-gray-700 max-w-lg w-full mx-4 transition-all duration-500 flex-col">
+            <h2 class="text-2xl font-bold text-white mb-2">Metode Kontrol</h2>
+            <p class="text-gray-400 text-sm mb-6">Bagaimana cara Anda ingin menangkap objek?</p>
+            
+            <div class="grid grid-cols-1 gap-3 mb-4">
+                <button onclick="selectControl(1)" class="bg-gray-800 hover:bg-blue-600 border border-gray-600 text-white font-bold py-3 px-4 rounded-xl text-left transition-all">
+                    👆 <span class="text-lg">Sentuhan Normal</span><br><span class="text-xs font-normal text-gray-300">Tunjuk untuk klik, nonaktifkan (istirahat) dengan 2 jari lurus (✌️).</span>
+                </button>
+                <button onclick="selectControl(2)" class="bg-gray-800 hover:bg-blue-600 border border-gray-600 text-white font-bold py-3 px-4 rounded-xl text-left transition-all">
+                    😁 <span class="text-lg">Senyum untuk Klik</span><br><span class="text-xs font-normal text-gray-300">Arahkan jari telunjuk, lalu tersenyum lebar untuk menangkap.</span>
+                </button>
+                <button onclick="selectControl(3)" class="bg-gray-800 hover:bg-blue-600 border border-gray-600 text-white font-bold py-3 px-4 rounded-xl text-left transition-all">
+                    😮 <span class="text-lg">Buka Mulut untuk Klik</span><br><span class="text-xs font-normal text-gray-300">Arahkan jari telunjuk, lalu buka mulut Anda untuk menangkap.</span>
+                </button>
+                <button onclick="selectControl(4)" class="bg-gray-800 hover:bg-blue-600 border border-gray-600 text-white font-bold py-3 px-4 rounded-xl text-left transition-all">
+                    😉 <span class="text-lg">Kedip untuk Klik</span><br><span class="text-xs font-normal text-gray-300">Arahkan jari telunjuk, lalu kedipkan mata Anda untuk menangkap.</span>
+                </button>
             </div>
         </div>
 
@@ -189,6 +210,7 @@
         const canvasCtx = canvasElement.getContext('2d');
         
         const startMenu = document.getElementById('start-menu');
+        const controlSelectionMenu = document.getElementById('control-selection'); // Tambahan
         const modeSelectionMenu = document.getElementById('mode-selection');
         const targetSelectionMenu = document.getElementById('target-selection');
         const targetGrid = document.getElementById('target-grid');
@@ -286,8 +308,11 @@
         let lastFrameTime = performance.now();
         let spawnTimer = 0;
         
-        // Variabel untuk mendeteksi senyuman
+        // Variabel untuk mendeteksi gestur wajah & mode kontrol
+        let selectedControlMethod = 1; 
         let isSmiling = false;
+        let isMouthOpen = false;
+        let isBlinking = false;
 
         function resizeCanvas() {
             canvasElement.width = window.innerWidth;
@@ -314,8 +339,15 @@
             initAudio(); // Inisialisasi Audio saat interaksi pertama
             requestFullScreen();
             startMenu.style.display = 'none';
-            modeSelectionMenu.style.display = 'flex';
+            controlSelectionMenu.style.display = 'flex'; // Arahkan ke menu kontrol dulu
         });
+
+        function selectControl(method) {
+            initAudio();
+            selectedControlMethod = method;
+            controlSelectionMenu.style.display = 'none';
+            modeSelectionMenu.style.display = 'flex'; // Lanjut ke menu mode
+        }
 
         function selectMode(mode) {
             initAudio();
@@ -447,64 +479,34 @@
                 speedX: (Math.random() - 0.5) * 2,
                 rotation: 0,
                 rotSpeed: (Math.random() - 0.5) * 0.1
-            });
-        }
-
-        function createParticles(x, y, color) {
-            for(let i=0; i<20; i++){
-                particles.push({
-                    x: x, y: y, vx: (Math.random() - 0.5) * 20, vy: (Math.random() - 0.5) * 20, life: 1.0, color: color
-                });
-            }
-        }
-
-        function showFloatingText(x, y, text, isPositive) {
-            const el = document.createElement('div');
-            el.className = `score-pop ${isPositive ? 'text-green-400' : 'text-red-500'}`;
-            el.innerText = text;
-            const mirroredX = window.innerWidth - x; 
-            el.style.left = `${mirroredX - 25}px`;
-            el.style.top = `${y - 25}px`;
-            document.getElementById('ui-layer').appendChild(el);
-            setTimeout(() => el.remove(), 1000);
-        }
-
-        function updateScoreDisplay() {
-            scoreDisplay.innerText = score;
-            if(score < 0) scoreDisplay.classList.add('text-red-400');
-            else scoreDisplay.classList.remove('text-red-400');
-        }
-
-        // --- MEDIA PIPE (AI TANGAN) ---
-        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-        hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
-
-        // --- MEDIA PIPE (AI WAJAH) ---
-        const faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
-        faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-
-        // Logika Mendeteksi Senyum
+        // Logika Mendeteksi Senyum, Mulut, dan Kedip
         faceMesh.onResults((results) => {
             if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
                 const landmarks = results.multiFaceLandmarks[0];
                 
-                // Titik sudut bibir kiri (61) dan kanan (291)
-                const mouthLeft = landmarks[61];
-                const mouthRight = landmarks[291];
+                // 1. Senyum (Rasio Lebar Bibir vs Lebar Wajah)
+                const mouthWidth = Math.hypot(landmarks[61].x - landmarks[291].x, landmarks[61].y - landmarks[291].y);
+                const faceWidth = Math.hypot(landmarks[234].x - landmarks[454].x, landmarks[234].y - landmarks[454].y);
+                isSmiling = (mouthWidth / faceWidth) > 0.40;
+
+                // 2. Buka Mulut (Jarak Bibir Atas vs Bawah dibandingkan Panjang Wajah)
+                const mouthOpenDist = Math.hypot(landmarks[13].x - landmarks[14].x, landmarks[13].y - landmarks[14].y);
+                const faceHeight = Math.hypot(landmarks[10].x - landmarks[152].x, landmarks[10].y - landmarks[152].y);
+                isMouthOpen = (mouthOpenDist / faceHeight) > 0.05; // 0.05 mendeteksi mulut terbuka dengan baik
+
+                // 3. Kedipan Mata (Eye Aspect Ratio - EAR)
+                const leftEyeV = Math.hypot(landmarks[159].x - landmarks[145].x, landmarks[159].y - landmarks[145].y);
+                const leftEyeH = Math.hypot(landmarks[33].x - landmarks[133].x, landmarks[33].y - landmarks[133].y);
+                const rightEyeV = Math.hypot(landmarks[386].x - landmarks[374].x, landmarks[386].y - landmarks[374].y);
+                const rightEyeH = Math.hypot(landmarks[362].x - landmarks[263].x, landmarks[362].y - landmarks[263].y);
                 
-                // Titik ujung tulang pipi kiri (234) dan kanan (454) untuk rasio perbandingan
-                const faceLeft = landmarks[234];
-                const faceRight = landmarks[454];
+                // Jika EAR turun di bawah 0.18, berarti mata memicing/menutup/berkedip
+                isBlinking = ((leftEyeV / leftEyeH) < 0.18 || (rightEyeV / rightEyeH) < 0.18);
 
-                // Hitung lebar mulut dan lebar wajah
-                const mouthWidth = Math.hypot(mouthLeft.x - mouthRight.x, mouthLeft.y - mouthRight.y);
-                const faceWidth = Math.hypot(faceLeft.x - faceRight.x, faceLeft.y - faceRight.y);
-
-                // Jika rasio lebar mulut meregang melebihi batas, anggap sedang tersenyum
-                const smileRatio = mouthWidth / faceWidth;
-                isSmiling = smileRatio > 0.40; // Ambang batas senyum (bisa disesuaikan)
             } else {
                 isSmiling = false;
+                isMouthOpen = false;
+                isBlinking = false;
             }
         });
 
@@ -533,7 +535,37 @@
                 if (results.multiHandLandmarks) {
                     results.multiHandLandmarks.forEach((landmarks) => {
                         const indexTip = landmarks[8];
-                        indexFingerTips.push({ x: (indexTip.x * drawWidth) + startX, y: (indexTip.y * drawHeight) + startY });
+                        const indexPIP = landmarks[6];
+                        const middleTip = landmarks[12];
+                        const middlePIP = landmarks[10];
+                        
+                        // Deteksi 2 Jari (V-Sign)
+                        let isVSign = (indexTip.y < indexPIP.y && middleTip.y < middlePIP.y);
+                        
+                        let fingerActive = false;
+                        let msg = "";
+
+                        // Penentuan Status Klik Berdasarkan Mode Kontrol Pilihan
+                        if (selectedControlMethod === 1) {
+                            fingerActive = !isVSign; // Non-aktif jika 2 jari diangkat
+                            msg = fingerActive ? "AKTIF" : "NON-AKTIF (✌️)";
+                        } else if (selectedControlMethod === 2) {
+                            fingerActive = isSmiling;
+                            msg = fingerActive ? "AKTIF" : "SENYUM!";
+                        } else if (selectedControlMethod === 3) {
+                            fingerActive = isMouthOpen;
+                            msg = fingerActive ? "AKTIF" : "BUKA MULUT!";
+                        } else if (selectedControlMethod === 4) {
+                            fingerActive = isBlinking;
+                            msg = fingerActive ? "AKTIF" : "KEDIP!";
+                        }
+
+                        indexFingerTips.push({ 
+                            x: (indexTip.x * drawWidth) + startX, 
+                            y: (indexTip.y * drawHeight) + startY,
+                            active: fingerActive,
+                            message: msg
+                        });
                     });
                 }
             }
@@ -583,9 +615,9 @@
 
                 let isTouched = false;
                 for (let pointer of indexFingerTips) {
-                    // Cek Tabrakan, lalu Cek Apakah Pemain Tersenyum
+                    // Cek Tabrakan, lalu Cek Apakah Kursor Aktif
                     if (Math.hypot(pointer.x - b.x, pointer.y - b.y) < b.radius + 15) { 
-                        if (isSmiling) {
+                        if (pointer.active) {
                             isTouched = true; 
                             break; 
                         }
@@ -680,8 +712,8 @@
                 canvasCtx.beginPath();
                 canvasCtx.arc(pointer.x, pointer.y, 18, 0, Math.PI * 2);
                 
-                if (isSmiling) {
-                    // Jika Tersenyum: Kursor Menyala dan Aktif
+                if (pointer.active) {
+                    // Jika Aktif: Kursor Menyala dan Membesar
                     canvasCtx.fillStyle = 'rgba(56, 189, 248, 0.8)';
                     canvasCtx.fill();
                     canvasCtx.lineWidth = 4;
@@ -690,7 +722,7 @@
                     canvasCtx.shadowBlur = 15;
                     canvasCtx.stroke();
                 } else {
-                    // Jika Tidak Tersenyum: Kursor Redup dan Pasif
+                    // Jika Tidak Aktif: Kursor Redup dan Pasif
                     canvasCtx.fillStyle = 'rgba(156, 163, 175, 0.3)';
                     canvasCtx.fill();
                     canvasCtx.lineWidth = 2;
@@ -701,15 +733,15 @@
                 
                 canvasCtx.beginPath();
                 canvasCtx.arc(pointer.x, pointer.y, 4, 0, Math.PI * 2);
-                canvasCtx.fillStyle = isSmiling ? '#ffffff' : 'rgba(255,255,255,0.5)';
+                canvasCtx.fillStyle = pointer.active ? '#ffffff' : 'rgba(255,255,255,0.5)';
                 canvasCtx.fill();
 
-                // Tambahkan Teks Bantuan di Atas Jari
+                // Tambahkan Teks Bantuan di Atas Jari sesuai instruksi metode
                 canvasCtx.scale(-1, 1); // Membalikkan teks agar bisa dibaca (anti-mirror)
-                canvasCtx.fillStyle = isSmiling ? '#4ade80' : '#f87171'; // Hijau jika aktif, Merah jika minta senyum
+                canvasCtx.fillStyle = pointer.active ? '#4ade80' : '#f87171'; // Hijau jika aktif, Merah jika pasif
                 canvasCtx.font = "bold 14px 'Segoe UI', Arial";
                 canvasCtx.textAlign = "center";
-                canvasCtx.fillText(isSmiling ? "AKTIF" : "SENYUM!", -pointer.x, pointer.y - 30);
+                canvasCtx.fillText(pointer.message, -pointer.x, pointer.y - 30);
                 canvasCtx.scale(-1, 1); // Kembalikan efek mirror
             }
         }
