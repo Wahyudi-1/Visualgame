@@ -2,698 +2,566 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Game Kamera: Tangkap Objek</title>
-    
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game AR: Makan Jatuh</title>
+
+    <!-- Pustaka MediaPipe untuk Deteksi Wajah -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #111; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; touch-action: none; }
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700&display=swap');
+
+        :root {
+            --p1-color: #FF6B6B; /* Merah untuk P1 */
+            --p2-color: #4ECDC4; /* Tosca untuk P2 */
+            --dark: #292F36;
+            --light: #F7FFF7;
+            --warning: #FFE66D;
+        }
+
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--dark); color: var(--light);
+            font-family: 'Nunito', sans-serif;
+            overflow: hidden; display: flex; justify-content: center; align-items: center;
+            height: 100vh;
+        }
+
+        #game-container {
+            position: relative; width: 100%; max-width: 900px; height: 100vh; max-height: 800px;
+            background: #000; box-shadow: 0 0 20px rgba(0,0,0,0.5); overflow: hidden;
+        }
+
+        video { display: none; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(41, 47, 54, 0.9); z-index: 10;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            text-align: center; padding: 20px; box-sizing: border-box; transition: opacity 0.3s;
+        }
+
+        .hidden { display: none !important; }
+
+        h1, h2 { font-family: 'Fredoka One', cursive; margin-bottom: 10px; letter-spacing: 1px; color: var(--warning); }
+        h1 { font-size: 2.5rem; text-shadow: 3px 3px 0px #C93838; }
+
+        p { font-size: 1.1rem; max-width: 600px; line-height: 1.5; margin-bottom: 20px; }
+
+        .instruction-box {
+            background: rgba(255,255,255,0.1); padding: 15px 25px; border-radius: 15px;
+            border: 2px dashed var(--warning); margin-bottom: 25px; width: 80%;
+        }
+
+        /* Pilihan Mode Permainan */
+        .mode-selector {
+            display: flex; justify-content: center; gap: 15px; margin-bottom: 20px;
+        }
         
-        /* PERBAIKAN BUG KAMERA: Video dilempar jauh dari layar tetapi ukurannya dipertahankan agar browser tidak membekukannya (Throttling) */
-        #webcam { position: absolute; left: -10000px; top: -10000px; width: 640px; height: 480px; pointer-events: none; }
+        .mode-btn {
+            padding: 10px 25px; font-size: 1.1rem; background: #555; color: white;
+            border-radius: 20px; cursor: pointer; border: none; font-family: 'Fredoka One', cursive;
+            box-shadow: 0 4px 0px #333; transition: all 0.2s;
+        }
         
-        #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; transform: scaleX(-1); object-fit: cover; }
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
-        .pointer-events-auto { pointer-events: auto; }
+        .mode-btn.active-mode {
+            background: var(--p2-color); box-shadow: 0 4px 0px #2A9D8F; color: var(--dark);
+        }
+
+        .input-group {
+            display: flex; gap: 15px; margin-bottom: 20px; width: 100%; justify-content: center; flex-wrap: wrap;
+        }
+
+        input[type="text"] {
+            padding: 12px 20px; font-size: 1.1rem; border: 3px solid transparent; border-radius: 25px;
+            outline: none; width: 200px; text-align: center; font-family: 'Fredoka One', cursive; color: var(--dark);
+            transition: all 0.3s;
+        }
         
-        .score-pop { position: absolute; font-weight: bold; font-size: 2.5rem; animation: floatUp 1s ease-out forwards; pointer-events: none; z-index: 20; text-shadow: 0 0 10px rgba(0,0,0,0.8); }
-        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-50px) scale(1.5); } }
+        #player1-name { border-color: var(--p1-color); }
+        #player2-name { border-color: var(--p2-color); display: none; /* Sembunyikan P2 di awal (Mode Solo) */ }
+
+        button.main-btn {
+            padding: 15px 40px; font-size: 1.2rem; font-family: 'Fredoka One', cursive;
+            border: none; border-radius: 30px; background-color: var(--warning); color: var(--dark);
+            cursor: pointer; box-shadow: 0 5px 0px #B8A34A; transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        button.main-btn:active { transform: translateY(5px); box-shadow: 0 0px 0px #B8A34A; }
+        button.main-btn:disabled { background-color: #777; box-shadow: 0 5px 0px #444; color: #fff; cursor: not-allowed; }
+
+        /* HUD */
+        #hud {
+            position: absolute; top: 20px; left: 20px; right: 20px;
+            display: flex; justify-content: space-between; align-items: flex-start;
+            z-index: 5; font-family: 'Fredoka One', cursive; font-size: 1.5rem; text-shadow: 2px 2px 0px #000;
+        }
+
+        .hud-player { display: flex; flex-direction: column; align-items: center; }
+        .hud-player span.name { font-size: 0.9rem; margin-bottom: 5px; text-shadow: none; background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 10px; }
+        .hud-box { background: rgba(0,0,0,0.4); padding: 10px 20px; border-radius: 20px; border: 2px solid rgba(255,255,255,0.2); }
         
-        .no-select { user-select: none; -webkit-user-select: none; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #1f2937; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
+        #hud-p1 .hud-box { border-color: var(--p1-color); color: var(--p1-color); }
+        #hud-p2 .hud-box { border-color: var(--p2-color); color: var(--p2-color); }
+
+        /* Leaderboard Table */
+        table { width: 100%; max-width: 400px; border-collapse: collapse; margin-bottom: 20px; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; }
+        th, td { padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.2); }
+        th { background: var(--warning); color: var(--dark); }
+        tr:nth-child(1) td { color: #FFD700; font-weight: bold; } 
+        tr:nth-child(2) td { color: #C0C0C0; font-weight: bold; } 
+        tr:nth-child(3) td { color: #CD7F32; font-weight: bold; } 
+
     </style>
 </head>
 <body>
 
-    <div id="ui-layer" class="flex flex-col justify-center items-center no-select">
+    <div id="game-container">
         
-        <!-- MENU UTAMA -->
-        <div id="start-menu" class="pointer-events-auto bg-gray-900 bg-opacity-90 p-8 rounded-3xl shadow-2xl text-center backdrop-blur-md border border-gray-700 max-w-md w-full mx-4 transition-all duration-500">
-            <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400 mb-2">
-                TANGKAP OBJEK
-            </h1>
-            <p class="text-gray-400 text-sm mb-6 uppercase tracking-widest font-semibold">Kamera Interaktif (Versi Ringan)</p>
-            
-            <div class="text-left text-gray-300 mb-6 space-y-2 text-sm bg-gray-800 p-4 rounded-xl">
-                <p>⏱️ Waktu Bermain: <span class="text-yellow-400 font-bold">Pilihan (0.5 - 5 Menit)</span>.</p>
-                <p>🎯 Tangkap target yang benar untuk <span class="text-green-400 font-bold">+10 Poin</span>.</p>
-                <p>💥 Hati-hati objek pengecoh! Salah sentuh <span class="text-red-500 font-bold">-10 Poin</span>.</p>
-                <p>👆 <span class="text-blue-400 font-bold">Kontrol Jari:</span> Luruskan telunjuk untuk menangkap. Luruskan dua jari (✌️) untuk menjeda kursor.</p>
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="game-canvas"></canvas>
+
+        <!-- HUD (Score & Waktu) -->
+        <div id="hud" class="hidden">
+            <div class="hud-player" id="hud-p1">
+                <span class="name" id="name-p1-display">Pemain 1</span>
+                <div class="hud-box"><span id="score-p1">0</span></div>
             </div>
-
-            <!-- Tombol Mulai (Memperbaiki tag penutup HTML sebelumnya yang rusak) -->
-            <button id="start-btn" class="w-full bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-500 hover:to-green-500 text-white font-bold py-4 px-6 rounded-2xl shadow-[0_0_15px_rgba(59,130,246,0.5)] transition-all transform hover:scale-105 active:scale-95 text-xl mb-4">
-                Mulai (Layar Penuh)
-            </button>
-
-            <!-- Keterangan Pembuat -->
-            <div class="mt-4 pt-4 border-t border-gray-700 text-sm text-gray-400">
-                <p>Dibuat oleh <span class="font-bold text-gray-200">Wahyudi</span> dengan menggunakan <span class="font-bold text-gray-200">Gemini AI</span></p>
-                <a href="https://wa.me/6281336578058" target="_blank" rel="noopener noreferrer" class="mt-3 inline-flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#128C7E] text-white font-bold py-2 px-4 rounded-xl transition-all shadow-lg transform hover:scale-105 pointer-events-auto">
-                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-                    0813-3657-8058
-                </a>
+            
+            <div class="hud-box" style="color: var(--warning); font-size: 1.8rem;">⏳ <span id="time-display">60</span></div>
+            
+            <div class="hud-player" id="hud-p2">
+                <span class="name" id="name-p2-display">Pemain 2</span>
+                <div class="hud-box"><span id="score-p2">0</span></div>
             </div>
         </div>
 
-        <!-- MENU PILIH WAKTU -->
-        <div id="time-selection" class="hidden pointer-events-auto bg-gray-900 bg-opacity-95 p-6 rounded-3xl shadow-2xl text-center backdrop-blur-md border border-gray-700 max-w-lg w-full mx-4 transition-all duration-500 flex-col">
-            <h2 class="text-2xl font-bold text-white mb-2">Pilih Waktu Bermain</h2>
-            <p class="text-gray-400 text-sm mb-6">Berapa lama Anda ingin bermain?</p>
+        <!-- LAYAR AWAL: Menu Utama -->
+        <div id="start-screen" class="screen">
+            <h1>Game Makan AR!</h1>
             
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-                <button onclick="selectTime(30)" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 px-4 rounded-xl text-lg transition-transform hover:scale-105 shadow-lg">0.5 Menit</button>
-                <button onclick="selectTime(60)" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 px-4 rounded-xl text-lg transition-transform hover:scale-105 shadow-lg">1 Menit</button>
-                <button onclick="selectTime(120)" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 px-4 rounded-xl text-lg transition-transform hover:scale-105 shadow-lg">2 Menit</button>
-                <button onclick="selectTime(180)" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 px-4 rounded-xl text-lg transition-transform hover:scale-105 shadow-lg">3 Menit</button>
-                <button onclick="selectTime(240)" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 px-4 rounded-xl text-lg transition-transform hover:scale-105 shadow-lg">4 Menit</button>
-                <button onclick="selectTime(300)" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 px-4 rounded-xl text-lg transition-transform hover:scale-105 shadow-lg">5 Menit</button>
+            <div class="mode-selector">
+                <button id="btn-mode-1" class="mode-btn active-mode">👤 1 Pemain</button>
+                <button id="btn-mode-2" class="mode-btn">👥 2 Pemain (Duel)</button>
             </div>
-            <button onclick="backToStartMenu()" class="mt-2 text-gray-400 hover:text-white text-sm underline pb-2">Kembali ke Menu Utama</button>
+
+            <div class="instruction-box">
+                <p id="instruction-text" style="font-size: 0.95rem; color: #ccc; margin-bottom: 10px;">
+                   🍕 <b>Makanan (+10 Poin)</b> | 💣 <b>Bom/Sampah (-15 Poin)</b>
+                </p>
+                <p style="font-size: 0.9rem; color: var(--warning); margin-bottom: 0;">
+                   Buka mulut untuk membidik, lalu <b>Tutup Mulutmu</b> saat makanan tepat di bibir!
+                </p>
+            </div>
+            
+            <div class="input-group">
+                <input type="text" id="player1-name" placeholder="Nama Pemain" autocomplete="off" maxlength="12">
+                <input type="text" id="player2-name" placeholder="Nama P2 (Kanan)" autocomplete="off" maxlength="12">
+            </div>
+            
+            <button id="btn-init-camera" class="main-btn">Aktifkan Kamera Dulu</button>
+            <p id="loading-status" style="margin-top: 15px; font-size: 0.9rem; color: var(--warning); display: none;">
+                Sedang memuat model AI (Tunggu sebentar)...
+            </p>
         </div>
 
-        <!-- MENU PILIH MODE -->
-        <div id="mode-selection" class="hidden pointer-events-auto bg-gray-900 bg-opacity-95 p-6 rounded-3xl shadow-2xl text-center backdrop-blur-md border border-gray-700 max-w-lg w-full mx-4 transition-all duration-500 flex-col">
-            <h2 class="text-2xl font-bold text-white mb-2">Pilih Mode Permainan</h2>
-            <p class="text-gray-400 text-sm mb-6">Apa yang ingin Anda tangkap hari ini?</p>
+        <!-- LAYAR AKHIR: Hasil & Leaderboard -->
+        <div id="end-screen" class="screen hidden">
+            <h1 id="end-title">Waktu Habis!</h1>
+            <h2 style="color: #fff; margin-bottom: 5px;">Skor: <span id="final-score">0</span></h2>
+            <p id="sync-status" style="font-size: 0.9rem; color: #aaa;">Menyimpan skor ke database...</p>
             
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                <button onclick="selectMode('huruf')" class="bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-400 hover:to-blue-500 text-white font-bold py-4 px-4 rounded-xl text-lg transition-transform hover:scale-105 shadow-lg flex flex-col items-center justify-center gap-2">
-                    <span>🔤 Huruf A - Z</span>
-                    <span class="text-xs bg-black bg-opacity-30 px-3 py-1 rounded-full">Besar & Kecil</span>
-                </button>
-                <button onclick="selectMode('angka')" class="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold py-4 px-4 rounded-xl text-lg transition-transform hover:scale-105 shadow-lg flex flex-col items-center justify-center gap-2">
-                    <span>🔢 Angka 0 - 30</span>
-                    <span class="text-xs bg-black bg-opacity-30 px-3 py-1 rounded-full">Dasar</span>
-                </button>
-                <button onclick="selectMode('warna')" class="bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-400 hover:to-orange-400 text-white font-bold py-4 px-4 rounded-xl text-lg transition-transform hover:scale-105 shadow-lg flex flex-col items-center justify-center gap-2">
-                    <span>🎨 Aneka Warna</span>
-                    <span class="text-xs bg-black bg-opacity-30 px-3 py-1 rounded-full">Visual</span>
-                </button>
-                <button onclick="openMathMenu()" class="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold py-4 px-4 rounded-xl text-lg transition-transform hover:scale-105 shadow-lg flex flex-col items-center justify-center gap-2">
-                    <span>🧮 Matematika</span>
-                    <span class="text-xs bg-black bg-opacity-30 px-3 py-1 rounded-full">Operasi Hitung</span>
-                </button>
-            </div>
-            <button onclick="backToTimeSelection()" class="mt-2 text-gray-400 hover:text-white text-sm underline pb-2">Kembali Pilih Waktu</button>
-        </div>
+            <table id="leaderboard-table">
+                <thead>
+                    <tr>
+                        <th>Peringkat</th>
+                        <th>Nama Jagoan</th>
+                        <th>Skor</th>
+                    </tr>
+                </thead>
+                <tbody id="leaderboard-body">
+                    <!-- Data Leaderboard -->
+                </tbody>
+            </table>
 
-        <!-- MENU PILIH MATEMATIKA -->
-        <div id="math-selection" class="hidden pointer-events-auto bg-gray-900 bg-opacity-95 p-6 rounded-3xl shadow-2xl text-center backdrop-blur-md border border-gray-700 max-w-lg w-full mx-4 transition-all duration-500 flex-col">
-            <h2 class="text-2xl font-bold text-white mb-2">Pilih Operasi Hitung</h2>
-            <p class="text-gray-400 text-sm mb-6">Pecahkan soal untuk menangkap target!</p>
-            
-            <div id="math-grid" class="grid grid-cols-2 gap-3 mb-4">
-                <button onclick="selectMathMode('math_add_1')" class="bg-gray-800 border border-gray-600 hover:bg-blue-600 hover:border-blue-400 text-white font-bold py-3 px-2 rounded-xl transition-all shadow-sm transform hover:scale-105 active:scale-95 flex flex-col items-center text-sm">
-                    <span class="text-xl mb-1">➕</span> Penjumlahan 1 Digit
-                </button>
-                <button onclick="selectMathMode('math_add_2')" class="bg-gray-800 border border-gray-600 hover:bg-blue-600 hover:border-blue-400 text-white font-bold py-3 px-2 rounded-xl transition-all shadow-sm transform hover:scale-105 active:scale-95 flex flex-col items-center text-sm">
-                    <span class="text-xl mb-1">➕</span> Penjumlahan 2 Digit
-                </button>
-                <button onclick="selectMathMode('math_sub_1')" class="bg-gray-800 border border-gray-600 hover:bg-red-600 hover:border-red-400 text-white font-bold py-3 px-2 rounded-xl transition-all shadow-sm transform hover:scale-105 active:scale-95 flex flex-col items-center text-sm">
-                    <span class="text-xl mb-1">➖</span> Pengurangan 1 Digit
-                </button>
-                <button onclick="selectMathMode('math_sub_2')" class="bg-gray-800 border border-gray-600 hover:bg-red-600 hover:border-red-400 text-white font-bold py-3 px-2 rounded-xl transition-all shadow-sm transform hover:scale-105 active:scale-95 flex flex-col items-center text-sm">
-                    <span class="text-xl mb-1">➖</span> Pengurangan 2 Digit
-                </button>
-                <button onclick="selectMathMode('math_mul_1')" class="bg-gray-800 border border-gray-600 hover:bg-purple-600 hover:border-purple-400 text-white font-bold py-3 px-2 rounded-xl transition-all shadow-sm transform hover:scale-105 active:scale-95 flex flex-col items-center text-sm">
-                    <span class="text-xl mb-1">✖️</span> Perkalian 1 Digit
-                </button>
-                <button onclick="selectMathMode('math_div')" class="bg-gray-800 border border-gray-600 hover:bg-green-600 hover:border-green-400 text-white font-bold py-3 px-2 rounded-xl transition-all shadow-sm transform hover:scale-105 active:scale-95 flex flex-col items-center text-sm">
-                    <span class="text-xl mb-1">➗</span> Pembagian Bulat
-                </button>
-            </div>
-            <button onclick="backToModeSelectionFromMath()" id="math-back-btn" class="mt-2 text-gray-400 hover:text-white text-sm underline pb-2">Kembali Pilih Mode</button>
-            <p id="math-loading-text" class="text-yellow-400 mt-2 text-sm hidden font-semibold animate-pulse">Menghidupkan Kamera & AI (Mohon tunggu)...</p>
-        </div>
-
-        <!-- MENU PILIH TARGET -->
-        <div id="target-selection" class="hidden pointer-events-auto bg-gray-900 bg-opacity-95 p-6 rounded-3xl shadow-2xl text-center backdrop-blur-md border border-gray-700 max-w-xl w-full mx-4 transition-all duration-500 max-h-[90vh] flex-col">
-            <h2 id="target-title" class="text-2xl font-bold text-white mb-2">Pilih Target Anda</h2>
-            <p class="text-gray-400 text-sm mb-4">Pilih satu target utama untuk ditangkap.</p>
-            
-            <div id="target-grid" class="grid grid-cols-4 sm:grid-cols-6 gap-3 overflow-y-auto custom-scrollbar p-2 mb-4 max-h-[60vh]"></div>
-
-            <button onclick="backToModeSelection()" id="back-btn" class="mt-2 text-gray-400 hover:text-white text-sm underline pb-2">Kembali Pilih Mode</button>
-            <p id="loading-text" class="text-yellow-400 mt-2 text-sm hidden font-semibold animate-pulse">Menghidupkan Kamera & AI (Mohon tunggu)...</p>
-        </div>
-
-        <!-- HUD GAME -->
-        <div id="hud" class="absolute top-0 left-0 w-full p-4 flex justify-between items-start hidden pointer-events-none">
-            <div class="flex gap-4">
-                <div class="bg-blue-900 bg-opacity-80 backdrop-blur-md rounded-2xl p-4 border border-blue-500 shadow-lg min-w-[100px] text-center flex flex-col items-center justify-center">
-                    <p class="text-blue-200 text-[10px] font-bold uppercase tracking-widest mb-1">TARGET</p>
-                    <div id="target-display" class="text-3xl font-black text-white">A</div>
-                </div>
-                <div class="bg-gray-900 bg-opacity-75 backdrop-blur-md rounded-2xl p-4 border border-gray-700 shadow-lg min-w-[100px] text-center">
-                    <p class="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1">SKOR</p>
-                    <p id="score-display" class="text-4xl font-black text-white transition-colors duration-300">0</p>
-                </div>
-            </div>
-            
-            <div class="flex flex-col gap-2 items-end">
-                <div id="timer-box" class="bg-gray-900 bg-opacity-75 backdrop-blur-md rounded-2xl p-3 border border-gray-700 shadow-lg min-w-[100px] text-center">
-                    <p class="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1">WAKTU</p>
-                    <p id="timer-display" class="text-3xl font-mono font-bold text-yellow-400">03:00</p>
-                </div>
-                <button onclick="exitFullscreenAndReload()" class="bg-red-500 bg-opacity-80 text-white text-xs font-bold px-3 py-2 rounded-xl pointer-events-auto hover:bg-red-600 shadow-lg backdrop-blur-md transition-transform hover:scale-105 mt-1">Akhiri Game</button>
-            </div>
-        </div>
-
-        <!-- GAME OVER -->
-        <div id="game-over" class="hidden pointer-events-auto bg-gray-900 bg-opacity-95 p-8 rounded-3xl shadow-2xl text-center backdrop-blur-md border border-gray-700 max-w-md w-full mx-4 transform scale-105">
-            <h1 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-yellow-500 mb-2">WAKTU HABIS!</h1>
-            <p class="text-gray-300 mb-6 text-lg">Permainan Selesai.</p>
-            
-            <div class="bg-gray-800 p-6 rounded-2xl mb-6 border border-gray-700">
-                <p class="text-gray-400 text-sm uppercase tracking-widest mb-2">Skor Akhir Anda</p>
-                <p id="final-score" class="text-6xl font-black text-white">0</p>
-            </div>
-
-            <button onclick="exitFullscreenAndReload()" class="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold py-4 px-6 rounded-2xl shadow-lg transition-all transform hover:scale-105 active:scale-95 text-xl">Main Lagi</button>
+            <button onclick="location.reload()" class="main-btn">Main Lagi</button>
         </div>
 
     </div>
 
-    <!-- Elemen Media -->
-    <video id="webcam" autoplay playsinline></video>
-    <canvas id="game-canvas"></canvas>
-
     <script>
+        // --- KONFIGURASI WEB APP URL ---
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyContohWebURLSilahkanDigantiDenganMilikAnda/exec';
+        const GAME_DURATION = 60; // Detik
+
+        // --- Variabel Game ---
+        let gameMode = 1; // 1 = Solo, 2 = Duel
+        let p1Name = "Pemain 1", p2Name = "Pemain 2";
+        let score1 = 0, score2 = 0;
+        let timeLeft = GAME_DURATION;
+        let gameActive = false;
+        let items = [];
+        let floatingTexts = [];
+        
+        let mouthWasOpen1 = false;
+        let mouthWasOpen2 = false;
+
+        // --- Event Listener Mode Pilihan ---
+        const btnMode1 = document.getElementById('btn-mode-1');
+        const btnMode2 = document.getElementById('btn-mode-2');
+        const inputP1 = document.getElementById('player1-name');
+        const inputP2 = document.getElementById('player2-name');
+
+        btnMode1.addEventListener('click', () => {
+            gameMode = 1;
+            btnMode1.classList.add('active-mode');
+            btnMode2.classList.remove('active-mode');
+            inputP2.style.display = 'none';
+            inputP1.placeholder = "Nama Pemain";
+        });
+
+        btnMode2.addEventListener('click', () => {
+            gameMode = 2;
+            btnMode2.classList.add('active-mode');
+            btnMode1.classList.remove('active-mode');
+            inputP2.style.display = 'inline-block';
+            inputP1.placeholder = "Nama P1 (Kiri)";
+        });
+        
+        // --- Sistem Suara (Web Audio API) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+            
+            if (type === 'eatGood') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(600, now); osc.frequency.exponentialRampToValueAtTime(1200, now + 0.15);
+                gain.gain.setValueAtTime(0.5, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                osc.start(now); osc.stop(now + 0.15);
+            } else if (type === 'eatBad') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(250, now); osc.frequency.exponentialRampToValueAtTime(100, now + 0.3);
+                gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
+            } else if (type === 'gameOver') {
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(400, now); osc.frequency.exponentialRampToValueAtTime(50, now + 1.0);
+                gain.gain.setValueAtTime(0.5, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 1.0);
+                osc.start(now); osc.stop(now + 1.0);
+            }
+        }
+
+        // --- Referensi DOM ---
         const videoElement = document.getElementById('webcam');
         const canvasElement = document.getElementById('game-canvas');
         const canvasCtx = canvasElement.getContext('2d');
-        
-        const startMenu = document.getElementById('start-menu');
-        const timeSelectionMenu = document.getElementById('time-selection');
-        const modeSelectionMenu = document.getElementById('mode-selection');
-        const mathSelectionMenu = document.getElementById('math-selection');
-        const targetSelectionMenu = document.getElementById('target-selection');
-        const targetGrid = document.getElementById('target-grid');
-        const loadingText = document.getElementById('loading-text');
-        const mathLoadingText = document.getElementById('math-loading-text');
-        
+        const startScreen = document.getElementById('start-screen');
+        const endScreen = document.getElementById('end-screen');
         const hud = document.getElementById('hud');
-        const scoreDisplay = document.getElementById('score-display');
-        const targetDisplay = document.getElementById('target-display');
-        const timerDisplay = document.getElementById('timer-display');
-        const timerBox = document.getElementById('timer-box');
-        const gameOverScreen = document.getElementById('game-over');
-        const finalScoreDisplay = document.getElementById('final-score');
-        const backBtn = document.getElementById('back-btn');
+        
+        // --- Aset Emoji ---
+        const goodFoods = ['🍕', '🍔', '🍟', '🌭', '🍩', '🍪', '🍫', '🍓', '🍉', '🍗'];
+        const badFoods = ['💣', '🕷️', '💩', '🪨', '🌶️'];
 
-        // AUDIO
-        let audioCtx;
-        function initAudio() {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-        }
-
-        function playCorrectSound() {
-            if(!audioCtx) return;
-            const osc = audioCtx.createOscillator(); const gainNode = audioCtx.createGain();
-            osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.type = 'sine'; const now = audioCtx.currentTime;
-            osc.frequency.setValueAtTime(523.25, now); osc.frequency.setValueAtTime(659.25, now + 0.1); osc.frequency.setValueAtTime(783.99, now + 0.2);
-            gainNode.gain.setValueAtTime(0, now); gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05); gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
-            osc.start(now); osc.stop(now + 0.4);
-        }
-
-        function playWrongSound() {
-            if(!audioCtx) return;
-            const osc = audioCtx.createOscillator(); const gainNode = audioCtx.createGain();
-            osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.type = 'square'; const now = audioCtx.currentTime;
-            osc.frequency.setValueAtTime(150, now); osc.frequency.exponentialRampToValueAtTime(30, now + 0.3);
-            gainNode.gain.setValueAtTime(0.5, now); gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
-            osc.start(now); osc.stop(now + 0.4);
-        }
-
-        // DATA
-        const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split('');
-        const NUMBERS = Array.from({length: 31}, (_, i) => i.toString());
-        const COLORS = [
-            { id: 'Merah', hex: '#ef4444' }, { id: 'Biru', hex: '#3b82f6' }, { id: 'Hijau', hex: '#22c55e' }, { id: 'Kuning', hex: '#eab308' },
-            { id: 'Ungu', hex: '#a855f7' }, { id: 'Oranye', hex: '#f97316' }, { id: 'Pink', hex: '#ec4899' }, { id: 'Putih', hex: '#ffffff' },
-            { id: 'Abu-abu', hex: '#6b7280' }, { id: 'Coklat', hex: '#78350f' }
-        ];
-
-        let currentMode = ''; let isGameRunning = false; let score = 0; let targetData = null; let timeRemaining = 180; let selectedTime = 180;
-        let bubbles = []; let particles = []; let indexFingerTips = []; 
-        let lastFrameTime = performance.now(); let spawnTimer = 0;
-        let handsReady = false; let isWaitingForCamera = false;
-        let framesWithoutHand = 0; // Tambahan: Mencegah kursor hilang/berkedip saat bergerak cepat
-
-        // FUNGSI PERBAIKAN: Menampilkan Skor HUD
-        function updateScoreDisplay() {
-            scoreDisplay.innerText = score;
-            if (score < 0) {
-                scoreDisplay.classList.add('text-red-500');
-                scoreDisplay.classList.remove('text-white');
-            } else {
-                scoreDisplay.classList.add('text-white');
-                scoreDisplay.classList.remove('text-red-500');
-            }
-        }
-
-        // FUNGSI PERBAIKAN: Efek Partikel saat Menyentuh Objek
-        function createParticles(x, y, color) {
-            for (let i = 0; i < 20; i++) {
-                particles.push({
-                    x: x, 
-                    y: y, 
-                    vx: (Math.random() - 0.5) * 12, 
-                    vy: (Math.random() - 0.5) * 12, 
-                    life: 1.0, 
-                    color: color
-                });
-            }
-        }
-
-        // FUNGSI PERBAIKAN: Teks Melayang "+10" / "-10"
-        function showFloatingText(x, y, text, isPositive) {
-            const el = document.createElement('div');
-            el.className = 'score-pop';
-            el.innerText = text;
-            el.style.color = isPositive ? '#4ade80' : '#ef4444';
-            
-            // Perhitungan kompensasi khusus karena canvas HTML terbalik efek cermin (scaleX(-1))
-            const visualX = window.innerWidth - x;
-            
-            el.style.left = `${visualX - 25}px`;
-            el.style.top = `${y - 20}px`;
-            document.getElementById('ui-layer').appendChild(el);
-            
-            // Hapus elemen saat animasi selesai
-            setTimeout(() => {
-                if(el.parentNode) el.parentNode.removeChild(el);
-            }, 1000);
-        }
-
-        function resizeCanvas() { canvasElement.width = window.innerWidth; canvasElement.height = window.innerHeight; }
+        function resizeCanvas() { canvasElement.width = canvasElement.clientWidth; canvasElement.height = canvasElement.clientHeight; }
         window.addEventListener('resize', resizeCanvas); resizeCanvas();
 
-        function requestFullScreen() {
-            const docElm = document.documentElement;
-            if (docElm.requestFullscreen) docElm.requestFullscreen();
-            else if (docElm.mozRequestFullScreen) docElm.mozRequestFullScreen();
-            else if (docElm.webkitRequestFullScreen) docElm.webkitRequestFullScreen();
-        }
-        function exitFullscreenAndReload() {
-            if (document.exitFullscreen) document.exitFullscreen();
-            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-            setTimeout(() => location.reload(), 300);
+        class FloatingText {
+            constructor(x, y, text, color) {
+                this.x = x; this.y = y; this.text = text; this.color = color;
+                this.alpha = 1.0; this.velocity = -2;
+            }
+            update() { this.y += this.velocity; this.alpha -= 0.02; }
+            draw(ctx) {
+                ctx.save(); ctx.globalAlpha = this.alpha; ctx.font = "bold 24px 'Fredoka One'";
+                ctx.fillStyle = this.color; ctx.strokeStyle = "white"; ctx.lineWidth = 3;
+                ctx.strokeText(this.text, this.x, this.y); ctx.fillText(this.text, this.x, this.y);
+                ctx.restore();
+            }
         }
 
-        // NAVIGATION
-        document.getElementById('start-btn').addEventListener('click', () => {
-            initAudio(); requestFullScreen();
-            startMenu.style.display = 'none'; timeSelectionMenu.style.display = 'flex';
+        function spawnItem() {
+            if (!gameActive) return;
+            const isGood = Math.random() > 0.3; 
+            const emojiArr = isGood ? goodFoods : badFoods;
+            const emoji = emojiArr[Math.floor(Math.random() * emojiArr.length)];
+            
+            const x = 0.1 + (Math.random() * 0.8);
+            const speed = 0.005 + (Math.random() * 0.008); 
+
+            items.push({ id: Date.now(), emoji: emoji, isGood: isGood, x: x, y: -0.1, speed: speed, targeted1: false, targeted2: false });
+        }
+
+        function eatItem(index, playerNum, mouthX, mouthY) {
+            const item = items[index];
+            const pointChange = item.isGood ? 10 : -15;
+            const color = item.isGood ? "#4ECDC4" : "#FF6B6B";
+            const text = pointChange > 0 ? `+10` : `-15`;
+
+            if (playerNum === 1) {
+                score1 += pointChange;
+                document.getElementById('score-p1').innerText = score1;
+            } else {
+                score2 += pointChange;
+                document.getElementById('score-p2').innerText = score2;
+            }
+
+            playSound(item.isGood ? 'eatGood' : 'eatBad');
+            floatingTexts.push(new FloatingText(mouthX, mouthY - 30, text, color));
+            items.splice(index, 1);
+        }
+
+        function endGame() {
+            gameActive = false;
+            hud.classList.add('hidden');
+            endScreen.classList.remove('hidden');
+            playSound('gameOver');
+
+            let winnerName = "";
+            let winnerScore = 0;
+            let titleText = "";
+
+            if (gameMode === 1) {
+                winnerName = p1Name;
+                winnerScore = score1;
+                titleText = "Waktu Habis!";
+            } else {
+                if (score1 > score2) {
+                    winnerName = p1Name; winnerScore = score1; titleText = `🎉 ${winnerName} Menang! 🎉`;
+                } else if (score2 > score1) {
+                    winnerName = p2Name; winnerScore = score2; titleText = `🎉 ${winnerName} Menang! 🎉`;
+                } else {
+                    winnerName = "Seri"; winnerScore = score1; titleText = "🤝 Pertandingan Seri! 🤝";
+                }
+            }
+
+            document.getElementById('end-title').innerText = titleText;
+            document.getElementById('final-score').innerText = winnerScore;
+
+            if (winnerName === "Seri") {
+                document.getElementById('sync-status').innerText = "Seri! Tidak ada skor yang dimasukkan ke database.";
+            }
+
+            submitScoreToGAS(winnerName, winnerScore);
+        }
+
+        function startTimer() {
+            const timerInterval = setInterval(() => {
+                if (!gameActive) return clearInterval(timerInterval);
+                timeLeft--; document.getElementById('time-display').innerText = timeLeft;
+                if (timeLeft <= 0) { clearInterval(timerInterval); endGame(); }
+            }, 1000);
+
+            function spawner() {
+                if (!gameActive) return;
+                spawnItem(); 
+                const spawnRate = gameMode === 2 ? 500 : 750;
+                setTimeout(spawner, spawnRate + Math.random() * 600); 
+            }
+            spawner();
+        }
+
+        async function submitScoreToGAS(name, finalScore) {
+            const syncStatus = document.getElementById('sync-status');
+            try {
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ nama: name, skor: finalScore })
+                });
+                const data = await response.json();
+                
+                if (data && data.leaderboard) {
+                    if(name !== "Seri") syncStatus.innerText = "Data berhasil disimpan di Database!";
+                    syncStatus.style.color = "var(--p2-color)";
+                    renderLeaderboard(data.leaderboard);
+                } else throw new Error("Format respons tidak sesuai");
+            } catch (error) {
+                console.error('Error:', error);
+                if(name !== "Seri") syncStatus.innerText = "Gagal terhubung ke database. (Menampilkan Data Lokal)";
+                syncStatus.style.color = "var(--p1-color)";
+                renderLeaderboard([
+                    {nama: name !== "Seri" ? name : p1Name, skor: finalScore},
+                    {nama: "Si Jago", skor: 250}, {nama: "Raja Makan", skor: 180}, {nama: "Si Lambat", skor: -20}
+                ].sort((a,b) => b.skor - a.skor));
+            }
+        }
+
+        function renderLeaderboard(boardData) {
+            const tbody = document.getElementById('leaderboard-body');
+            tbody.innerHTML = '';
+            boardData.forEach((player, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>#${index + 1}</td><td>${player.nama}</td><td>${player.skor}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // --- MediaPipe Face Mesh Initialization ---
+        const faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
+        
+        faceMesh.setOptions({
+            maxNumFaces: 2, 
+            refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5
         });
 
-        function selectTime(seconds) {
-            initAudio(); selectedTime = seconds;
-            timeSelectionMenu.style.display = 'none'; modeSelectionMenu.style.display = 'flex';
-        }
+        faceMesh.onResults((results) => {
+            const btnInit = document.getElementById('btn-init-camera');
+            if (!gameActive && !startScreen.classList.contains('hidden') && btnInit.disabled) {
+                document.getElementById('loading-status').style.display = 'none';
+                btnInit.innerText = gameMode === 1 ? "Mulai Permainan!" : "Mulai Duel!";
+                btnInit.style.backgroundColor = "var(--p2-color)";
+                btnInit.disabled = false;
+                btnInit.onclick = () => {
+                    if (audioCtx.state === 'suspended') audioCtx.resume();
+                    
+                    p1Name = document.getElementById('player1-name').value.trim() || "Pemain 1";
+                    document.getElementById('name-p1-display').innerText = p1Name;
 
-        // Perbaikan animasi Menu saat kembali
-        function backToStartMenu() { timeSelectionMenu.style.display = 'none'; startMenu.style.display = 'block'; }
-        function backToTimeSelection() { modeSelectionMenu.style.display = 'none'; timeSelectionMenu.style.display = 'flex'; }
+                    if (gameMode === 2) {
+                        p2Name = document.getElementById('player2-name').value.trim() || "Pemain 2";
+                        document.getElementById('name-p2-display').innerText = p2Name;
+                        document.getElementById('hud-p2').style.display = 'flex';
+                    } else {
+                        document.getElementById('hud-p2').style.display = 'none';
+                    }
 
-        function openMathMenu() {
-            initAudio();
-            modeSelectionMenu.style.display = 'none'; mathSelectionMenu.style.display = 'flex';
-        }
-        function backToModeSelectionFromMath() {
-            mathSelectionMenu.style.display = 'none'; modeSelectionMenu.style.display = 'flex';
-        }
+                    startScreen.classList.add('hidden'); hud.classList.remove('hidden');
+                    gameActive = true; startTimer();
+                };
+            }
 
-        function selectMode(mode) {
-            initAudio(); currentMode = mode;
-            modeSelectionMenu.style.display = 'none'; targetSelectionMenu.style.display = 'flex';
-            const titleEl = document.getElementById('target-title');
-            if(mode === 'huruf') titleEl.innerText = "Pilih Huruf Target";
-            else if(mode === 'angka') titleEl.innerText = "Pilih Angka Target";
-            else if(mode === 'warna') titleEl.innerText = "Pilih Warna Target";
-            populateTargetGrid();
-        }
+            const w = canvasElement.width; const h = canvasElement.height;
+            canvasCtx.clearRect(0, 0, w, h);
+            
+            canvasCtx.save(); canvasCtx.translate(w, 0); canvasCtx.scale(-1, 1);
+            canvasCtx.drawImage(results.image, 0, 0, w, h); canvasCtx.restore();
 
-        function backToModeSelection() { targetSelectionMenu.style.display = 'none'; modeSelectionMenu.style.display = 'flex'; }
+            canvasCtx.fillStyle = 'rgba(0,0,0,0.3)'; canvasCtx.fillRect(0,0,w,h);
 
-        function populateTargetGrid() {
-            targetGrid.innerHTML = ''; let items = [];
-            if (currentMode === 'huruf') items = ALPHABET; else if (currentMode === 'angka') items = NUMBERS; else if (currentMode === 'warna') items = COLORS;
-            targetGrid.className = `grid gap-3 overflow-y-auto custom-scrollbar p-2 mb-4 max-h-[60vh] ${currentMode === 'angka' ? 'grid-cols-5 sm:grid-cols-7' : 'grid-cols-4 sm:grid-cols-6'}`;
+            // --- Logika Pemisahan 1 atau 2 Pemain ---
+            let currentP1 = null; 
+            let currentP2 = null; 
 
-            items.forEach(item => {
-                const btn = document.createElement('button');
-                btn.className = "bg-gray-800 border border-gray-600 hover:bg-blue-600 hover:border-blue-400 text-white font-bold py-3 rounded-xl transition-all shadow-sm transform hover:scale-110 active:scale-95 flex flex-col items-center justify-center min-h-[60px]";
-                if (currentMode === 'warna') {
-                    btn.innerHTML = `<div class="w-8 h-8 rounded-full shadow-inner mb-1 border border-gray-400" style="background-color: ${item.hex}"></div><span class="text-[10px] uppercase">${item.id}</span>`;
-                    btn.onclick = () => selectFinalTarget(item); 
-                } else {
-                    btn.innerText = item; btn.className += " text-xl"; btn.onclick = () => selectFinalTarget(item); 
+            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                
+                let faces = [];
+                // Menambahkan safety check (pengecekan keamanan) untuk mencegah error undefined
+                results.multiFaceLandmarks.forEach(lm => {
+                    if (lm && lm[13] && lm[14] && lm[61] && lm[291]) {
+                        const topLip = lm[13], bottomLip = lm[14], leftMouth = lm[61], rightMouth = lm[291];
+                        const mX = (1 - ((topLip.x + bottomLip.x) / 2)) * w; 
+                        const mY = ((topLip.y + bottomLip.y) / 2) * h;
+                        const mH = Math.hypot(bottomLip.x - topLip.x, bottomLip.y - topLip.y);
+                        const mW = Math.hypot(rightMouth.x - leftMouth.x, rightMouth.y - leftMouth.y);
+                        const isOpen = (mH / mW) > 0.15;
+                        faces.push({ mX, mY, isOpen });
+                    }
+                });
+
+                faces.sort((a, b) => a.mX - b.mX);
+
+                if (faces.length > 0) {
+                    if (gameMode === 1) {
+                        currentP1 = faces[0];
+                    } else {
+                        if (faces.length === 1) {
+                            if (faces[0].mX < w / 2) currentP1 = faces[0]; else currentP2 = faces[0];
+                        } else if (faces.length >= 2) {
+                            currentP1 = faces[0]; 
+                            currentP2 = faces[1]; 
+                        }
+                    }
                 }
-                targetGrid.appendChild(btn);
-            });
-        }
 
-        function selectFinalTarget(target) {
-            initAudio(); targetData = target;
-            targetDisplay.innerHTML = '';
-            if (currentMode === 'warna') { targetDisplay.innerHTML = `<div class="w-10 h-10 rounded-full shadow-lg border-2 border-white" style="background-color: ${target.hex}"></div>`; } 
-            else { targetDisplay.innerText = target; }
-            
-            targetGrid.style.display = 'none'; backBtn.style.display = 'none';
-            document.querySelector('#target-selection h2').innerText = "Mempersiapkan AI...";
-            document.querySelector('#target-selection p').style.display = 'none';
-            loadingText.style.display = 'block';
-            isWaitingForCamera = true;
+                // Render P1
+                if (currentP1) {
+                    canvasCtx.beginPath(); canvasCtx.arc(currentP1.mX, currentP1.mY, 40, 0, 2 * Math.PI); canvasCtx.lineWidth = 4;
+                    canvasCtx.strokeStyle = currentP1.isOpen ? 'var(--p1-color)' : 'var(--warning)';
+                    canvasCtx.fillStyle = currentP1.isOpen ? 'rgba(255, 107, 107, 0.2)' : 'rgba(255, 230, 109, 0.2)';
+                    canvasCtx.stroke(); canvasCtx.fill();
+                }
 
-            camera.start().catch(err => { alert("Gagal mengakses kamera. Pastikan memberikan izin!"); location.reload(); });
-        }
-
-        function selectMathMode(mode) {
-            initAudio(); currentMode = mode;
-            document.getElementById('math-grid').style.display = 'none';
-            document.getElementById('math-back-btn').style.display = 'none';
-            document.querySelector('#math-selection h2').innerText = "Mempersiapkan AI...";
-            document.querySelector('#math-selection p').style.display = 'none';
-            mathLoadingText.style.display = 'block';
-            isWaitingForCamera = true;
-
-            camera.start().catch(err => { alert("Gagal mengakses kamera. Pastikan memberikan izin!"); location.reload(); });
-        }
-
-        function generateMathQuestion() {
-            let a, b, ans, op;
-            switch(currentMode) {
-                case 'math_add_1':
-                    a = Math.floor(Math.random() * 9) + 1; b = Math.floor(Math.random() * 9) + 1;
-                    ans = a + b; op = '+'; break;
-                case 'math_add_2':
-                    a = Math.floor(Math.random() * 90) + 10; b = Math.floor(Math.random() * 90) + 10;
-                    ans = a + b; op = '+'; break;
-                case 'math_sub_1':
-                    a = Math.floor(Math.random() * 9) + 1; b = Math.floor(Math.random() * a) + 1; 
-                    if (b > a) b = a; // Mencegah hasil negatif
-                    ans = a - b; op = '-'; break;
-                case 'math_sub_2':
-                    a = Math.floor(Math.random() * 90) + 10; b = Math.floor(Math.random() * 90) + 10;
-                    if (b > a) { let temp = a; a = b; b = temp; } // Memastikan selalu bilangan positif/bulat
-                    ans = a - b; op = '-'; break;
-                case 'math_mul_1':
-                    a = Math.floor(Math.random() * 9) + 1; b = Math.floor(Math.random() * 9) + 1;
-                    ans = a * b; op = 'x'; break;
-                case 'math_div':
-                    b = Math.floor(Math.random() * 9) + 1; // Pembagi (1-9)
-                    ans = Math.floor(Math.random() * 10) + 1; // Jawaban (1-10)
-                    a = b * ans; // Angka yang dibagi (Otomatis menghasilkan 1 atau 2 digit)
-                    op = ':'; break;
-            }
-            targetData = { text: `${a} ${op} ${b}`, answer: ans.toString() };
-            targetDisplay.innerHTML = `<span class="text-2xl">${targetData.text}</span>`;
-            
-            // Mengubah jawaban target pada gelembung yang sudah melayang
-            bubbles.forEach(b => { b.isTarget = (b.data === targetData.answer); });
-        }
-
-        function startGamePlay() {
-            loadingText.style.display = 'none'; 
-            mathLoadingText.style.display = 'none';
-            targetSelectionMenu.style.display = 'none'; 
-            mathSelectionMenu.style.display = 'none';
-            hud.style.display = 'flex';
-            
-            if (currentMode.startsWith('math_')) {
-                generateMathQuestion();
-            }
-
-            isGameRunning = true; score = 0; timeRemaining = selectedTime; bubbles = [];
-            updateScoreDisplay(); lastFrameTime = performance.now();
-        }
-
-        function showGameOverScreen() {
-            isGameRunning = false; hud.style.display = 'none'; gameOverScreen.style.display = 'block';
-            finalScoreDisplay.innerText = score; if(score < 0) finalScoreDisplay.classList.replace('text-white', 'text-red-500');
-        }
-
-        function formatTime(seconds) {
-            const m = Math.floor(seconds / 60); const s = Math.floor(seconds % 60);
-            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-        }
-
-        // SPAWNER GELEMBUNG
-        function spawnBubble() {
-            let isTargetObj = Math.random() < 0.35; let spawnedData;
-            if (currentMode === 'huruf') {
-                if (isTargetObj) { spawnedData = targetData; } 
-                else { do { spawnedData = ALPHABET[Math.floor(Math.random() * ALPHABET.length)]; } while (spawnedData.toUpperCase() === targetData.toUpperCase()); }
-                if (Math.random() < 0.5) spawnedData = spawnedData.toLowerCase(); 
-            } 
-            else if (currentMode === 'angka') {
-                if (isTargetObj) { spawnedData = targetData; } 
-                else { do { spawnedData = NUMBERS[Math.floor(Math.random() * NUMBERS.length)]; } while (spawnedData === targetData); }
-            }
-            else if (currentMode === 'warna') {
-                if (isTargetObj) { spawnedData = targetData; } 
-                else { do { spawnedData = COLORS[Math.floor(Math.random() * COLORS.length)]; } while (spawnedData.id === targetData.id); }
-            }
-            else if (currentMode.startsWith('math_')) {
-                if (isTargetObj) { 
-                    spawnedData = targetData.answer; 
-                } 
-                else { 
-                    let offset;
-                    do { offset = Math.floor(Math.random() * 11) - 5; } while (offset === 0);
-                    let wrongAns = parseInt(targetData.answer) + offset;
-                    if (wrongAns < 0 && !currentMode.includes('sub')) wrongAns = Math.abs(wrongAns);
-                    spawnedData = wrongAns.toString(); 
+                // Render P2
+                if (currentP2 && gameMode === 2) {
+                    canvasCtx.beginPath(); canvasCtx.arc(currentP2.mX, currentP2.mY, 40, 0, 2 * Math.PI); canvasCtx.lineWidth = 4;
+                    canvasCtx.strokeStyle = currentP2.isOpen ? 'var(--p2-color)' : 'var(--warning)';
+                    canvasCtx.fillStyle = currentP2.isOpen ? 'rgba(78, 205, 196, 0.2)' : 'rgba(255, 230, 109, 0.2)';
+                    canvasCtx.stroke(); canvasCtx.fill();
                 }
             }
-            const radius = currentMode === 'warna' ? Math.random() * 10 + 35 : Math.random() * 15 + 35; 
-            bubbles.push({
-                x: Math.random() * (canvasElement.width - radius * 2) + radius, y: -radius - 50, radius: radius,
-                data: spawnedData, isTarget: isTargetObj, speedY: Math.random() * 3 + 3, speedX: (Math.random() - 0.5) * 2, rotation: 0, rotSpeed: (Math.random() - 0.5) * 0.1
-            });
-        }
 
-        // --- SISTEM PELACAKAN JARI TANGAN (HANDS AI) ---
-        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-        hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
+            if (gameActive) {
+                for (let i = items.length - 1; i >= 0; i--) {
+                    items[i].y += items[i].speed;
+                    if (items[i].y > 1.1) items.splice(i, 1);
+                }
 
-        hands.onResults((results) => {
-            handsReady = true;
-            
-            // Pastikan gambar video ada dan berukuran valid
-            if (results.image && results.image.width > 0) {
-                const vW = results.image.width;
-                const vH = results.image.height;
-                const canvasRatio = canvasElement.width / canvasElement.height;
-                const videoRatio = vW / vH;
-                let drawWidth, drawHeight, startX, startY;
+                for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                    floatingTexts[i].update();
+                    if (floatingTexts[i].alpha <= 0) floatingTexts.splice(i, 1);
+                }
 
-                // Matematika pemetaan presisi tinggi (cover object-fit)
-                if (canvasRatio > videoRatio) { 
-                    drawWidth = canvasElement.width; drawHeight = canvasElement.width / videoRatio; startX = 0; startY = (canvasElement.height - drawHeight) / 2; 
-                } else { 
-                    drawHeight = canvasElement.height; drawWidth = canvasElement.height * videoRatio; startX = (canvasElement.width - drawWidth) / 2; startY = 0; 
+                for (let i = items.length - 1; i >= 0; i--) {
+                    const item = items[i];
+                    const itemPixelX = item.x * w; const itemPixelY = item.y * h;
+
+                    canvasCtx.globalAlpha = 1.0; canvasCtx.fillStyle = "#FFFFFF";
+                    canvasCtx.font = "40px Arial"; canvasCtx.textAlign = "center"; canvasCtx.textBaseline = "middle";
+                    canvasCtx.fillText(item.emoji, itemPixelX, itemPixelY);
+
+                    item.targeted1 = false; item.targeted2 = false;
+                    const radius = 50;
+
+                    if (currentP1 && Math.hypot(itemPixelX - currentP1.mX, itemPixelY - currentP1.mY) < radius) {
+                        item.targeted1 = true;
+                    }
+                    if (currentP2 && gameMode === 2 && Math.hypot(itemPixelX - currentP2.mX, itemPixelY - currentP2.mY) < radius) {
+                        item.targeted2 = true;
+                    }
+
+                    if (item.targeted1 || item.targeted2) {
+                        canvasCtx.beginPath(); canvasCtx.arc(itemPixelX, itemPixelY, 30, 0, 2 * Math.PI);
+                        canvasCtx.strokeStyle = item.targeted1 ? 'var(--p1-color)' : 'var(--p2-color)';
+                        canvasCtx.lineWidth = 3; canvasCtx.setLineDash([5, 5]); canvasCtx.stroke(); canvasCtx.setLineDash([]);
+                    }
+
+                    // Eksekusi "Hap!"
+                    if (item.targeted1 && mouthWasOpen1 && (!currentP1 || !currentP1.isOpen)) {
+                        eatItem(i, 1, currentP1.mX, currentP1.mY);
+                    } else if (item.targeted2 && mouthWasOpen2 && (!currentP2 || !currentP2.isOpen)) {
+                        eatItem(i, 2, currentP2.mX, currentP2.mY);
+                    }
                 }
                 
-                let newFingerTips = [];
-                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                    framesWithoutHand = 0; // Reset counter karena tangan terdeteksi
-                    results.multiHandLandmarks.forEach((landmarks) => {
-                        // Titik Acuan MediaPipe
-                        const wrist = landmarks[0];            // Pergelangan Tangan
-                        const indexMCP = landmarks[5];         // Pangkal Telunjuk (Knuckle)
-                        const indexPIP = landmarks[6];         // Sendi Tengah Telunjuk
-                        const indexTip = landmarks[8];         // Ujung Telunjuk
-                        const middleMCP = landmarks[9];        // Pangkal Jari Tengah
-                        const middlePIP = landmarks[10];       // Sendi Tengah Jari Tengah
-                        const middleTip = landmarks[12];       // Ujung Jari Tengah
-                        const ringMCP = landmarks[13];         // Pangkal Jari Manis
-                        const ringPIP = landmarks[14];         // Sendi Tengah Jari Manis
-                        const ringTip = landmarks[16];         // Ujung Jari Manis
-
-                        // PERBAIKAN LOGIKA AI: 
-                        // Menggunakan perbandingan jarak Tip-Wrist vs PIP-Wrist. 
-                        // Ini adalah metode paling stabil di sudut kamera mana pun agar sensor selalu aktif.
-                        const getDist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
-                        
-                        const isIndexExtended = getDist(indexTip, wrist) > getDist(indexPIP, wrist);
-                        const isMiddleExtended = getDist(middleTip, wrist) > getDist(middlePIP, wrist);
-                        const isRingExtended = getDist(ringTip, wrist) > getDist(ringPIP, wrist);
-
-                        // V-Sign (Pause): Telunjuk Lurus, Tengah Lurus, Manis Ditekuk
-                        let isVSign = isIndexExtended && isMiddleExtended && !isRingExtended;
-
-                        // Tentukan Status dan Pesan Kursor
-                        let fingerActive = true; // Kursor secara bawaan akan AKTIF kecuali benar-benar ditekuk
-                        let msg = "AKTIF";
-
-                        if (isVSign) {
-                            fingerActive = false;
-                            msg = "JEDA (✌️)";
-                        } else if (!isIndexExtended) {
-                            fingerActive = false;
-                            msg = "JARI DITEKUK";
-                        }
-
-                        // Daftarkan koordinat kursor ke dalam game
-                        newFingerTips.push({ 
-                            x: (indexTip.x * drawWidth) + startX, 
-                            y: (indexTip.y * drawHeight) + startY, 
-                            active: fingerActive, 
-                            message: msg 
-                        });
-                    });
-                    indexFingerTips = newFingerTips;
-                } else {
-                    // Jika AI gagal membaca frame akibat gerakan cepat, pertahankan kursor selama 5 frame
-                    framesWithoutHand++;
-                    if (framesWithoutHand > 5) {
-                        indexFingerTips = [];
-                    }
-                }
+                floatingTexts.forEach(ft => ft.draw(canvasCtx));
             }
 
-            // Memulai game setelah AI siap membaca setidaknya 1 frame
-            if (handsReady && isWaitingForCamera && !isGameRunning) {
-                isWaitingForCamera = false;
-                startGamePlay();
-            }
+            mouthWasOpen1 = currentP1 ? currentP1.isOpen : false;
+            mouthWasOpen2 = currentP2 ? currentP2.isOpen : false;
         });
 
-        // CAMERA - Pemrosesan ringan & stabil
-        let isProcessingCamera = false;
-        const camera = new Camera(videoElement, { 
-            onFrame: async () => { 
-                if (isProcessingCamera) return; 
-                isProcessingCamera = true;
-                try {
-                    await hands.send({image: videoElement});
-                } catch (error) {
-                    console.error("AI Error:", error);
-                } finally {
-                    isProcessingCamera = false;
-                }
-            }, 
-            width: 640, height: 480 
+        // --- Inisialisasi Kamera ---
+        const camera = new Camera(videoElement, {
+            onFrame: async () => { await faceMesh.send({image: videoElement}); },
+            width: 640, height: 480
         });
 
-        // RENDER LOOP TERPISAH DARI AI (Agar Grafis Mulus 60FPS)
-        function renderLoop() {
-            requestAnimationFrame(renderLoop);
-            canvasCtx.save();
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        document.getElementById('btn-init-camera').addEventListener('click', () => {
+            const btn = document.getElementById('btn-init-camera');
+            btn.innerText = "Meminta Izin Kamera..."; btn.disabled = true;
+            document.getElementById('loading-status').style.display = 'block';
 
-            if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
-                const vW = videoElement.videoWidth;
-                const vH = videoElement.videoHeight;
-                const videoRatio = vW / vH;
-                const canvasRatio = canvasElement.width / canvasElement.height;
-                let drawWidth, drawHeight, startX, startY;
-                if (canvasRatio > videoRatio) { drawWidth = canvasElement.width; drawHeight = canvasElement.width / videoRatio; startX = 0; startY = (canvasElement.height - drawHeight) / 2; } 
-                else { drawHeight = canvasElement.height; drawWidth = canvasElement.height * videoRatio; startX = (canvasElement.width - drawWidth) / 2; startY = 0; }
-                canvasCtx.drawImage(videoElement, startX, startY, drawWidth, drawHeight);
-            }
+            camera.start().catch((err) => {
+                alert("Kamera tidak dapat diakses! Pastikan Anda memberikan izin.");
+                btn.innerText = "Aktifkan Kamera Dulu"; btn.disabled = false;
+                document.getElementById('loading-status').style.display = 'none';
+            });
+        });
 
-            if (isGameRunning) updateAndDrawGame();
-            canvasCtx.restore();
-        }
-        renderLoop();
-
-        // GAME LOGIC
-        function updateAndDrawGame() {
-            const now = performance.now(); const dt = (now - lastFrameTime) / 1000; lastFrameTime = now;
-
-            timeRemaining -= dt;
-            if (timeRemaining <= 0) { timeRemaining = 0; showGameOverScreen(); return; }
-            
-            timerDisplay.innerText = formatTime(timeRemaining);
-            if (timeRemaining < 10) { timerBox.classList.add('border-red-500'); timerDisplay.classList.add('text-red-500'); timerDisplay.classList.remove('text-yellow-400'); }
-
-            spawnTimer += dt; if (spawnTimer > 0.8) { spawnBubble(); spawnTimer = 0; }
-
-            for (let i = bubbles.length - 1; i >= 0; i--) {
-                let b = bubbles[i];
-                b.y += b.speedY * (dt * 60); b.x += b.speedX * (dt * 60); b.rotation += b.rotSpeed * (dt * 60);
-                if (b.x < b.radius || b.x > canvasElement.width - b.radius) b.speedX *= -1;
-
-                // Cek tabrakan gelembung dengan ujung jari yang AKTIF
-                let isTouched = false;
-                for (let pointer of indexFingerTips) {
-                    if (Math.hypot(pointer.x - b.x, pointer.y - b.y) < b.radius + 15) { 
-                        if (pointer.active) { isTouched = true; break; } 
-                    }
-                }
-
-                if (isTouched) {
-                    if (b.isTarget) {
-                        playCorrectSound(); score += 10; showFloatingText(b.x, b.y, "+10", true);
-                        createParticles(b.x, b.y, currentMode === 'warna' ? b.data.hex : '#4ade80');
-                        if (currentMode.startsWith('math_')) {
-                            generateMathQuestion();
-                        }
-                    } else {
-                        playWrongSound(); score -= 10; showFloatingText(b.x, b.y, "-10", false);
-                        createParticles(b.x, b.y, '#ef4444'); 
-                        canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.4)'; canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
-                    }
-                    updateScoreDisplay(); bubbles.splice(i, 1); continue;
-                }
-
-                if (b.y > canvasElement.height + b.radius) { bubbles.splice(i, 1); continue; }
-
-                canvasCtx.save(); canvasCtx.translate(b.x, b.y); canvasCtx.rotate(b.rotation);
-                if (currentMode === 'warna') {
-                    canvasCtx.beginPath(); canvasCtx.arc(0, 0, b.radius, 0, Math.PI * 2); canvasCtx.fillStyle = b.data.hex; canvasCtx.fill();
-                    canvasCtx.lineWidth = 4; canvasCtx.strokeStyle = '#ffffff'; canvasCtx.stroke();
-                    canvasCtx.beginPath(); canvasCtx.arc(-b.radius*0.3, -b.radius*0.3, b.radius*0.3, 0, Math.PI * 2); canvasCtx.fillStyle = 'rgba(255, 255, 255, 0.4)'; canvasCtx.fill();
-                } else {
-                    canvasCtx.beginPath(); canvasCtx.arc(0, 0, b.radius, 0, Math.PI * 2); canvasCtx.fillStyle = 'rgba(30, 64, 175, 0.6)'; canvasCtx.fill();
-                    canvasCtx.lineWidth = 3; canvasCtx.strokeStyle = 'rgba(96, 165, 250, 0.9)'; canvasCtx.stroke();
-                    canvasCtx.beginPath(); canvasCtx.arc(-b.radius*0.3, -b.radius*0.3, b.radius*0.3, 0, Math.PI * 2); canvasCtx.fillStyle = 'rgba(255, 255, 255, 0.3)'; canvasCtx.fill();
-                    canvasCtx.scale(-1, 1); canvasCtx.fillStyle = '#ffffff'; canvasCtx.font = `bold ${b.radius}px 'Segoe UI', Arial`; canvasCtx.textAlign = 'center'; canvasCtx.textBaseline = 'middle';
-                    canvasCtx.shadowColor = 'rgba(0,0,0,0.8)'; canvasCtx.shadowBlur = 5; canvasCtx.fillText(b.data, 0, 0);
-                }
-                canvasCtx.restore();
-            }
-
-            for (let i = particles.length - 1; i >= 0; i--) {
-                let p = particles[i]; p.x += p.vx * (dt * 60); p.y += p.vy * (dt * 60); p.life -= dt * 3.0; 
-                if (p.life <= 0) { particles.splice(i, 1); continue; }
-                canvasCtx.globalAlpha = p.life; canvasCtx.beginPath(); canvasCtx.arc(p.x, p.y, 6, 0, Math.PI * 2); canvasCtx.fillStyle = p.color; canvasCtx.fill();
-            }
-            canvasCtx.globalAlpha = 1.0;
-
-            // RENDER JARI & KURSOR VISUAL
-            for (let pointer of indexFingerTips) {
-                canvasCtx.beginPath(); canvasCtx.arc(pointer.x, pointer.y, 18, 0, Math.PI * 2);
-                if (pointer.active) {
-                    canvasCtx.fillStyle = 'rgba(56, 189, 248, 0.8)'; canvasCtx.fill(); canvasCtx.lineWidth = 4;
-                    canvasCtx.strokeStyle = '#ffffff'; canvasCtx.shadowColor = '#38bdf8'; canvasCtx.shadowBlur = 15; canvasCtx.stroke();
-                } else {
-                    canvasCtx.fillStyle = 'rgba(156, 163, 175, 0.4)'; canvasCtx.fill(); canvasCtx.lineWidth = 2;
-                    canvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; canvasCtx.stroke();
-                }
-                canvasCtx.shadowBlur = 0; 
-                canvasCtx.beginPath(); canvasCtx.arc(pointer.x, pointer.y, 4, 0, Math.PI * 2);
-                canvasCtx.fillStyle = pointer.active ? '#ffffff' : 'rgba(255,255,255,0.5)'; canvasCtx.fill();
-
-                // Teks Penanda Jari
-                canvasCtx.save(); canvasCtx.translate(pointer.x, pointer.y - 35); canvasCtx.scale(-1, 1); 
-                canvasCtx.fillStyle = pointer.active ? '#4ade80' : '#f87171'; canvasCtx.font = "bold 14px 'Segoe UI', Arial"; canvasCtx.textAlign = "center";
-                canvasCtx.shadowColor = 'rgba(0,0,0,1)'; canvasCtx.shadowBlur = 6; canvasCtx.fillText(pointer.message, 0, 0);
-                canvasCtx.restore();
-            }
-        }
     </script>
 </body>
 </html>
